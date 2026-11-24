@@ -9,7 +9,7 @@
   <span>{% if kelas %}Ubah{% else %}Tambah{% endif %} Kelas</span>
 </div>
 <div style="max-width:620px">
-  <form method="post">
+  <form method="post" id="form-kelas">
     {% csrf_token %}
     <div class="panel">
       <div class="panel-head"><h3>Data Kelas</h3></div>

@@ -1,0 +1,96 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Evaluasi Sumatif{% endblock %}
+{% block topbar %}Evaluasi Sumatif{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Evaluasi Sumatif</h2>
+    <p>Rencana penilaian akhir tahun pelajaran {{ tahun.tahun|default:"-" }}. Gunakan tombol Nilai untuk mengisi nilai peserta didik.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'akademik:sumatif_evaluasi_tambah' %}{% if mapel_filter %}?mapel={{ mapel_filter }}{% endif %}"><svg class="icon"><use href="#i-plus"/></svg> Tambah Evaluasi</a>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>Daftar Evaluasi Sumatif</h3>
+    <span class="hint">{{ page_obj.paginator.count }} evaluasi</span>
+  </div>
+  <form class="filter-bar" id="filter-evaluasi-sumatif-list" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama evaluasi...">
+    <select class="form-input" name="mapel">
+      <option value="">Semua mata pelajaran</option>
+      {% for subject in subjects %}
+      <option value="{{ subject.id }}" {% if mapel_filter == subject.id|stringformat:'s' %}selected{% endif %}>{{ subject.nama }}</option>
+      {% endfor %}
+    </select>
+    <select class="form-input" name="jenis">
+      <option value="">Semua jenis</option>
+      {% for value, label in jenis_choices %}
+      <option value="{{ value }}" {% if jenis_filter == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select class="form-input" name="status">
+      <option value="">Semua status</option>
+      <option value="aktif" {% if status_filter == 'aktif' %}selected{% endif %}>Aktif</option>
+      <option value="nonaktif" {% if status_filter == 'nonaktif' %}selected{% endif %}>Nonaktif</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+  <div class="table-wrap">
+    <table class="data" id="table-evaluasi-sumatif-list">
+      <thead>
+        <tr>
+          <th class="num" style="width:46px">No</th>
+          <th>Nama Evaluasi</th>
+          <th>Mata Pelajaran</th>
+          <th>Jenis</th>
+          <th class="num">Tanggal</th>
+          <th class="num">Bobot</th>
+          <th class="num">Status</th>
+          <th style="width:210px">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="num">{{ forloop.counter }}</td>
+          <td><strong>{{ row.nama }}</strong><span class="sub">{{ row.deskripsi|truncatechars:90|default:"-" }}</span></td>
+          <td>{{ row.subject.nama }}</td>
+          <td>{{ row.get_jenis_display }}</td>
+          <td class="num">{{ row.tanggal|date:"d/m/Y"|default:"-" }}</td>
+          <td class="num">{{ row.bobot|floatformat:'-2' }}</td>
+          <td class="num">{% if row.aktif %}<span class="badge badge-green">Aktif</span>{% else %}<span class="badge badge-gray">Nonaktif</span>{% endif %}</td>
+          <td>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <a class="btn btn-sm btn-primary" href="{% url 'akademik:sumatif_entry' row.subject_id %}">Nilai</a>
+              <a class="btn btn-sm" href="{% url 'akademik:sumatif_evaluasi_ubah' row.id %}"><svg class="icon"><use href="#i-edit"/></svg> Ubah</a>
+              <form method="post" action="{% url 'akademik:sumatif_evaluasi_hapus' row.id %}" class="inline-form" onsubmit="return confirm('Hapus evaluasi ini?');">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-danger" type="submit"><svg class="icon"><use href="#i-trash"/></svg></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="empty"><strong>Belum ada evaluasi sumatif</strong>Tambahkan rencana evaluasi untuk mapel yang Anda ampu.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'akademik/_pagination.html' %}
+  <div class="panel-body" style="border-top:1px solid var(--line)">
+    <div class="hint" style="margin-bottom:8px">Input nilai sumatif langsung per mata pelajaran:</div>
+    <div class="legend">
+      {% for subject in subjects %}
+      <a class="btn btn-sm" href="{% url 'akademik:sumatif_entry' subject.id %}">{{ subject.nama }}</a>
+      {% empty %}
+      <span class="hint">Belum ada mata pelajaran yang dapat dinilai.</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

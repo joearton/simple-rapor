@@ -142,6 +142,23 @@ a:hover { text-decoration: underline; }
   white-space: nowrap;
 }
 
+.period-form { display: flex; align-items: center; gap: 6px; margin: 0; }
+.period-form select,
+.period-form .btn {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  line-height: 1;
+}
+.period-form select {
+  width: auto;
+  min-width: 120px;
+  max-width: 160px;
+  padding-right: 28px;
+}
+
 .content { padding: 24px 28px 48px; width: 100%; }
 
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -326,6 +343,7 @@ table.data .sub { display: block; font-weight: 400; color: var(--muted); font-si
 
 .cell-input {
   width: 58px;
+  min-width: 70px;
   padding: 5px 4px;
   text-align: center;
   border: 1px solid #d8e1dc;
@@ -589,7 +607,9 @@ table.data .sub { display: block; font-weight: 400; color: var(--muted); font-si
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px 4px 5px;
+  min-height: 40px;
+  max-width: 240px;
+  padding: 4px 11px 4px 5px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: #fff;
@@ -597,15 +617,17 @@ table.data .sub { display: block; font-weight: 400; color: var(--muted); font-si
 .user-menu > summary::-webkit-details-marker { display: none; }
 .user-menu > summary:hover { border-color: #bcd9cb; background: #fbfdfc; }
 .user-menu[open] > summary { border-color: var(--green-600); box-shadow: 0 0 0 3px rgba(18, 133, 92, 0.1); }
-.user-menu-text { display: flex; flex-direction: column; line-height: 1.15; }
+.user-menu > summary > .icon { margin-left: auto; color: var(--muted); transition: transform 0.15s ease; }
+.user-menu[open] > summary > .icon { transform: rotate(90deg); }
+.user-menu-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .user-menu-text strong { font-size: 12px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.user-menu-text span { font-size: 10px; color: var(--muted); }
+.user-menu-text span { font-size: 10px; color: var(--muted); white-space: nowrap; }
 .user-dropdown {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
   z-index: 60;
-  min-width: 235px;
+  min-width: 245px;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -618,8 +640,10 @@ table.data .sub { display: block; font-weight: 400; color: var(--muted); font-si
 .user-dropdown a, .user-dropdown button {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 9px;
   width: 100%;
+  min-height: 36px;
   padding: 8px 10px;
   border: 0;
   border-radius: 7px;
@@ -627,11 +651,15 @@ table.data .sub { display: block; font-weight: 400; color: var(--muted); font-si
   color: var(--ink);
   font: inherit;
   font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.2;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 .user-dropdown a:hover, .user-dropdown button:hover { background: var(--green-100); text-decoration: none; }
-.user-dropdown .icon { width: 16px; height: 16px; color: var(--green-700); }
+.user-dropdown .icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--green-700); }
+.user-dropdown form { margin: 4px 0 0; padding-top: 4px; border-top: 1px solid var(--line); }
 
 /* ---------- Print ---------- */
 .print-only { display: none; }

@@ -3,7 +3,7 @@
 {% block topbar %}Beranda{% endblock %}
 
 {% block content %}
-<div class="hero">
+<div class="hero" id="dashboard-hero">
   <div class="eyebrow">Kurikulum Merdeka &middot; {{ semester_aktif.academic_year.tahun|default:"-" }} &middot; Semester {{ semester_aktif.nama|default:"-" }}</div>
   {% if guru %}
   <h2>{{ guru.nama }}</h2>
@@ -12,24 +12,27 @@
     {% if is_wali_kelas %}&middot; Wali Kelas {{ kelas_aktif.nama_lengkap }}{% endif %}
     &middot; {{ total_mapel }} mata pelajaran dapat Anda kelola.
   </p>
+  {% elif kepala %}
+  <h2>Monitoring Akademik</h2>
+  <p>Kepala Sekolah &middot; pantau kelengkapan nilai dan rapor seluruh kelas.</p>
   {% else %}
   <h2>{{ sekolah.nama }}</h2>
   <p>Kelola data guru, pembagian mengajar, tujuan pembelajaran, nilai, catatan, hingga cetak rapor.</p>
   {% endif %}
 </div>
 
-{% if not is_admin_sekolah and not guru %}
+{% if not is_admin_sekolah and not guru and not kepala %}
 <div class="alert error">Akun ini belum terhubung dengan Data Guru. Hubungi admin sekolah untuk menghubungkan akun.</div>
 {% endif %}
 
-<div class="stat-row">
+<div class="stat-row" id="dashboard-stats">
   <div class="stat">
     <div class="label">Peserta Didik</div>
     <div class="value">{{ total_siswa }}</div>
     <div class="note">Kelas {{ kelas_aktif.nama_lengkap|default:"-" }}</div>
   </div>
   <div class="stat">
-    <div class="label">{% if is_admin_sekolah %}Mata Pelajaran{% else %}Mapel Diampu{% endif %}</div>
+    <div class="label">{% if is_admin_sekolah or kepala %}Mata Pelajaran{% else %}Mapel Diampu{% endif %}</div>
     <div class="value">{{ total_mapel }}</div>
     <div class="note">{{ total_tp }} tujuan pembelajaran</div>
   </div>
@@ -54,7 +57,7 @@
 
 <div class="page-head">
   <div>
-    <h2>{% if is_admin_sekolah %}Ringkasan Mata Pelajaran{% else %}Mapel yang Anda Ampu{% endif %}</h2>
+    <h2>{% if is_admin_sekolah or kepala %}Ringkasan Mata Pelajaran{% else %}Mapel yang Anda Ampu{% endif %}</h2>
     <p>Progres nilai sumatif per mata pelajaran pada semester aktif.</p>
   </div>
   {% if is_admin_sekolah %}
@@ -64,7 +67,7 @@
 
 <div class="panel" style="margin-bottom:22px">
   <div class="table-wrap" style="max-height:none">
-    <table class="data">
+    <table class="data" id="table-dashboard">
       <thead>
         <tr>
           <th class="num" style="width:48px">No</th>
@@ -96,9 +99,14 @@
           </td>
           <td>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <a class="btn btn-sm" href="{% url 'akademik:tp_list' card.subject.id %}">TP</a>
-              <a class="btn btn-sm" href="{% url 'akademik:formatif_entry' card.subject.id %}">Formatif</a>
-              <a class="btn btn-sm btn-primary" href="{% url 'akademik:sumatif_entry' card.subject.id %}">Sumatif</a>
+              {% if kepala %}
+              <a class="btn btn-sm" href="{% url 'akademik:leger' %}">Leger</a>
+              <a class="btn btn-sm btn-primary" href="{% url 'akademik:rapor_index' %}">Rapor</a>
+              {% else %}
+              <a class="btn btn-sm" href="{% url 'akademik:tp_menu' %}?mapel={{ card.subject.id }}">TP</a>
+              <a class="btn btn-sm" href="{% url 'akademik:formatif_menu' %}?mapel={{ card.subject.id }}">Formatif</a>
+              <a class="btn btn-sm btn-primary" href="{% url 'akademik:sumatif_menu' %}?mapel={{ card.subject.id }}">Sumatif</a>
+              {% endif %}
             </div>
           </td>
         </tr>
@@ -117,7 +125,7 @@
   </div>
 </div>
 
-<div class="menu-grid">
+<div class="menu-grid" id="dashboard-menu">
   {% if is_admin_sekolah %}
   <a class="menu-card" href="{% url 'akademik:guru_list' %}">
     <div class="mc-icon"><svg class="icon"><use href="#i-user"/></svg></div>
@@ -155,18 +163,31 @@
     <div class="mc-icon"><svg class="icon"><use href="#i-trophy"/></svg></div>
     <div><strong>Ekstrakurikuler</strong><small>Hingga lima kegiatan dengan predikat dan deskripsi.</small></div>
   </a>
+  {% elif kepala %}
+  <a class="menu-card" href="{% url 'akademik:siswa_list' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-users"/></svg></div>
+    <div><strong>Data Siswa</strong><small>Lihat peserta didik seluruh kelas.</small></div>
+  </a>
+  <a class="menu-card accent" href="{% url 'akademik:leger' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-chart"/></svg></div>
+    <div><strong>Leger Nilai</strong><small>Pantau rekap nilai seluruh kelas.</small></div>
+  </a>
+  <a class="menu-card accent" href="{% url 'akademik:rapor_index' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-printer"/></svg></div>
+    <div><strong>Cetak Rapor</strong><small>Periksa dan cetak rapor peserta didik.</small></div>
+  </a>
   {% else %}
   <a class="menu-card" href="{% url 'akademik:tp_menu' %}">
     <div class="mc-icon"><svg class="icon"><use href="#i-target"/></svg></div>
-    <div><strong>Tujuan Pembelajaran</strong><small>Kelola TP mata pelajaran yang Anda ampu.</small></div>
+    <div><strong>Tujuan Pembelajaran</strong><small>Kelola TP dan lingkup materi mapel yang Anda ampu.</small></div>
   </a>
   <a class="menu-card" href="{% url 'akademik:formatif_menu' %}">
     <div class="mc-icon"><svg class="icon"><use href="#i-clipboard"/></svg></div>
-    <div><strong>Asesmen Formatif</strong><small>Nilai TP skala 1-4 dengan deskripsi capaian otomatis.</small></div>
+    <div><strong>Evaluasi Formatif</strong><small>Rencanakan evaluasi dan isi capaian peserta didik.</small></div>
   </a>
   <a class="menu-card" href="{% url 'akademik:sumatif_menu' %}">
     <div class="mc-icon"><svg class="icon"><use href="#i-chart"/></svg></div>
-    <div><strong>Asesmen Sumatif</strong><small>Nilai LM, STS, dan SAS untuk nilai rapor.</small></div>
+    <div><strong>Evaluasi Sumatif</strong><small>Rencanakan STS/SAS dan isi nilai rapor peserta didik.</small></div>
   </a>
   {% if is_wali_kelas %}
   <a class="menu-card" href="{% url 'akademik:catatan_entry' %}">

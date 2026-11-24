@@ -22,7 +22,7 @@
   <div class="panel">
     <div class="panel-head"><h3>Unggah File Excel</h3></div>
     <div class="panel-body">
-      <form method="post" enctype="multipart/form-data">
+      <form method="post" id="form-import" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="field" style="margin-bottom:14px">
           <label for="file">File Excel (.xlsx)</label>

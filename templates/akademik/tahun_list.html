@@ -30,7 +30,7 @@
     <div class="row-flex">
       <h3>{{ row.tahun.tahun }}</h3>
       {% if row.tahun.aktif %}<span class="badge badge-green">Aktif</span>{% else %}<span class="badge badge-gray">Tidak aktif</span>{% endif %}
-      <span class="hint">{{ row.semesters|length }} semester &middot; {{ row.classes|length }} kelas &middot; {{ row.jumlah_siswa }} siswa</span>
+      <span class="hint">{{ row.semesters|length }} semester &middot; {{ row.classes|length }} kelas &middot; {{ row.jumlah_siswa }} siswa{% if row.tahun.tanggal_mulai %} &middot; {{ row.tahun.tanggal_mulai|date:"d/m/Y" }}–{{ row.tahun.tanggal_berakhir|date:"d/m/Y" }}{% endif %}</span>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       {% if not row.tahun.aktif %}
@@ -48,9 +48,11 @@
   </div>
   <div class="panel-body">
     <div class="legend" style="margin-bottom:14px;padding:10px 12px;background:#f8fbf9;border:1px solid var(--line);border-radius:8px">
-      <span><b>{{ row.jumlah_tp }}</b> TP</span>
+      <span><b>{{ row.jumlah_tp }}</b> tugas</span>
       <span><b>{{ row.jumlah_formatif }}</b> nilai formatif</span>
       <span><b>{{ row.jumlah_sumatif }}</b> nilai sumatif</span>
+      <span><b>{{ row.jumlah_eval_formatif }}</b> evaluasi formatif</span>
+      <span><b>{{ row.jumlah_eval_sumatif }}</b> evaluasi sumatif</span>
       <span><b>{{ row.jumlah_catatan }}</b> catatan</span>
       <span><b>{{ row.jumlah_ekskul }}</b> ekskul</span>
     </div>
@@ -60,7 +62,7 @@
         <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
           <a class="btn btn-sm" href="{% url 'akademik:semester_tambah' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-plus"/></svg> Semester</a>
         </div>
-        <table class="data">
+        <table class="data" id="table-tahun-list">
           <thead><tr><th>Semester</th><th class="num">Status</th><th style="width:160px">Aksi</th></tr></thead>
           <tbody>
             {% for sem in row.semesters %}

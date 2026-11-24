@@ -30,7 +30,7 @@
   </section>
 
   <section class="login-panel">
-    <div class="login-card">
+    <div class="login-card" id="login-card">
       <div class="eyebrow">Aplikasi Rapor</div>
       <h2>Masuk ke akun Anda</h2>
       <p>Gunakan akun guru atau admin yang diberikan oleh sekolah.</p>
@@ -45,7 +45,7 @@
 
       {% if form.errors %}<div class="login-error">Username, password, atau kode captcha tidak sesuai. Silakan coba lagi.</div>{% endif %}
 
-      <form method="post">
+      <form method="post" id="form-login">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ next }}">
         <div class="field">
@@ -59,6 +59,7 @@
         <div class="field captcha-field">
           <label for="{{ form.captcha.id_for_label }}">Kode Captcha</label>
           {{ form.captcha }}
+          <div class="help">{{ form.captcha.help_text }}</div>
           {% if form.captcha.errors %}<div class="help" style="color:var(--danger)">{{ form.captcha.errors|striptags }}</div>{% endif %}
         </div>
         <button type="submit" class="btn btn-primary">Masuk</button>

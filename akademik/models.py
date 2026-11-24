@@ -100,6 +100,8 @@ class School(models.Model):
 
 class AcademicYear(models.Model):
     tahun = models.CharField('Tahun Pelajaran', max_length=20, unique=True)
+    tanggal_mulai = models.DateField('Tanggal Mulai', null=True, blank=True)
+    tanggal_berakhir = models.DateField('Tanggal Berakhir', null=True, blank=True)
     aktif = models.BooleanField(default=False)
 
     class Meta:
@@ -232,10 +234,19 @@ class ClassGroup(models.Model):
 
 
 class Subject(models.Model):
-    nama = models.CharField('Mata Pelajaran', max_length=100, unique=True)
+    academic_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.CASCADE,
+        related_name='mata_pelajaran',
+        verbose_name='Tahun Pelajaran',
+    )
+    nama = models.CharField('Mata Pelajaran', max_length=100)
+    kode = models.CharField('Kode Mapel', max_length=20, blank=True)
+    deskripsi = models.TextField('Deskripsi', blank=True)
     urutan = models.PositiveSmallIntegerField('Urutan', default=0)
 
     class Meta:
+        unique_together = [('academic_year', 'nama')]
         ordering = ['urutan', 'nama']
         verbose_name = 'Mata Pelajaran'
         verbose_name_plural = 'Mata Pelajaran'
@@ -272,7 +283,7 @@ class TeachingAssignment(models.Model):
 
 
 class LearningObjective(models.Model):
-    """Tujuan Pembelajaran (TP) / Lingkup Materi per tahun pelajaran."""
+    """Tujuan Pembelajaran (TP) per mata pelajaran dan tahun pelajaran."""
 
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='tujuan_list')
     academic_year = models.ForeignKey(
@@ -285,8 +296,8 @@ class LearningObjective(models.Model):
         Teacher, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='tujuan_list', verbose_name='Guru Pengampu',
     )
-    nomor = models.PositiveSmallIntegerField('Nomor TP')
-    deskripsi = models.TextField('Tujuan Pembelajaran / Lingkup Materi')
+    nomor = models.PositiveSmallIntegerField('Nomor Urut')
+    deskripsi = models.TextField('Tujuan Pembelajaran')
     aktif = models.BooleanField('Aktif', default=True)
 
     class Meta:
@@ -297,6 +308,68 @@ class LearningObjective(models.Model):
 
     def __str__(self):
         return f'TP {self.nomor} - {self.subject.nama} ({self.academic_year.tahun})'
+
+
+class EvaluasiFormatif(models.Model):
+    """Rencana evaluasi formatif yang berkelanjutan pada suatu mata pelajaran."""
+
+    JENIS = [
+        ('kuis', 'Kuis'),
+        ('latihan', 'Latihan Soal'),
+        ('tanya_jawab', 'Tanya Jawab'),
+        ('observasi', 'Observasi'),
+        ('lain', 'Lainnya'),
+    ]
+
+    subject = models.ForeignKey(
+        Subject, on_delete=models.CASCADE, related_name='evaluasi_formatif',
+        verbose_name='Mata Pelajaran',
+    )
+    nama = models.CharField('Nama Evaluasi', max_length=150)
+    jenis = models.CharField(max_length=20, choices=JENIS, default='kuis')
+    tanggal = models.DateField('Tanggal', null=True, blank=True)
+    bobot = models.DecimalField('Bobot (%)', max_digits=5, decimal_places=2, default=0)
+    deskripsi = models.TextField('Deskripsi', blank=True)
+    aktif = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['subject__urutan', 'tanggal', 'nama']
+        verbose_name = 'Evaluasi Formatif'
+        verbose_name_plural = 'Evaluasi Formatif'
+
+    def __str__(self):
+        return f'{self.nama} - {self.subject.nama}'
+
+
+class EvaluasiSumatif(models.Model):
+    """Rencana evaluasi sumatif pada akhir lingkup materi atau semester."""
+
+    JENIS = [
+        ('sts', 'Sumatif Tengah Semester'),
+        ('sas', 'Sumatif Akhir Semester'),
+        ('ulangan', 'Ulangan Akhir Materi'),
+        ('tugas_akhir', 'Tugas Akhir'),
+        ('lain', 'Lainnya'),
+    ]
+
+    subject = models.ForeignKey(
+        Subject, on_delete=models.CASCADE, related_name='evaluasi_sumatif',
+        verbose_name='Mata Pelajaran',
+    )
+    nama = models.CharField('Nama Evaluasi', max_length=150)
+    jenis = models.CharField(max_length=20, choices=JENIS, default='sts')
+    tanggal = models.DateField('Tanggal', null=True, blank=True)
+    bobot = models.DecimalField('Bobot (%)', max_digits=5, decimal_places=2, default=0)
+    deskripsi = models.TextField('Deskripsi', blank=True)
+    aktif = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['subject__urutan', 'tanggal', 'nama']
+        verbose_name = 'Evaluasi Sumatif'
+        verbose_name_plural = 'Evaluasi Sumatif'
+
+    def __str__(self):
+        return f'{self.nama} - {self.subject.nama}'
 
 
 class Student(models.Model):
@@ -444,6 +517,10 @@ class HomeroomNote(models.Model):
 
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='catatan')
     semester = models.ForeignKey(Semester, on_delete=models.CASCADE, related_name='catatan')
+    academic_year = models.ForeignKey(
+        AcademicYear, on_delete=models.CASCADE, related_name='catatan',
+        verbose_name='Tahun Pelajaran',
+    )
     guru = models.ForeignKey(
         Teacher, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='catatan', verbose_name='Wali Kelas',
@@ -469,6 +546,10 @@ class Extracurricular(models.Model):
     semester = models.ForeignKey(
         Semester, on_delete=models.CASCADE, related_name='ekstrakurikuler'
     )
+    academic_year = models.ForeignKey(
+        AcademicYear, on_delete=models.CASCADE, related_name='ekstrakurikuler',
+        verbose_name='Tahun Pelajaran',
+    )
     guru = models.ForeignKey(
         Teacher, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='ekstrakurikuler', verbose_name='Guru Pembina',
@@ -486,3 +567,40 @@ class Extracurricular(models.Model):
 
     def __str__(self):
         return f'{self.nama} - {self.student}'
+
+
+class AuditLog(models.Model):
+    AKSI = [
+        ('LOGIN', 'Login'),
+        ('LOGOUT', 'Logout'),
+        ('CREATE', 'Tambah'),
+        ('UPDATE', 'Ubah'),
+        ('DELETE', 'Hapus'),
+        ('ACTIVATE', 'Aktivasi'),
+        ('IMPORT', 'Impor'),
+        ('EXPORT', 'Ekspor'),
+        ('PUBLISH', 'Publikasi'),
+        ('UNLOCK', 'Buka Kunci'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='audit_log',
+    )
+    aksi = models.CharField(max_length=20, choices=AKSI)
+    model = models.CharField(max_length=100, blank=True)
+    object_id = models.CharField(max_length=50, blank=True)
+    deskripsi = models.TextField(blank=True)
+    data_lama = models.JSONField(null=True, blank=True)
+    data_baru = models.JSONField(null=True, blank=True)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=250, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Audit Log'
+        verbose_name_plural = 'Audit Log'
+
+    def __str__(self):
+        return f'{self.created_at:%d/%m/%Y %H:%M} - {self.aksi} - {self.model}'

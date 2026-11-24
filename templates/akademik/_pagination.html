@@ -1,5 +1,5 @@
 {% if page_obj and page_obj.paginator.count %}
-<div class="pagination">
+<div class="pagination" id="pagination">
   <div class="hint">
     Menampilkan {{ page_obj.start_index }}–{{ page_obj.end_index }} dari {{ page_obj.paginator.count }} data
   </div>

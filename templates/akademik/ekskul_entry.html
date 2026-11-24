@@ -6,7 +6,7 @@
 <div class="page-head">
   <div>
     <h2>Ekstrakurikuler</h2>
-    <p>Isi hingga lima kegiatan per siswa, lengkap dengan predikat dan deskripsi singkat.{% if guru %} Pembina/Wali Kelas: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
+    <p>Isi hingga lima kegiatan per siswa, lengkap dengan predikat dan deskripsi singkat. Semester {{ semester_aktif.nama|default:"-" }} tahun pelajaran {{ semester_aktif.academic_year.tahun|default:"-" }}.{% if guru %} Pembina/Wali Kelas: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
   </div>
   <div class="actions">
     <a class="btn" href="{% url 'akademik:ekspor' 'ekskul' %}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
@@ -25,7 +25,7 @@
   <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
 </form>
 
-<form method="post" action="{% querystring %}">
+<form method="post" id="form-ekskul" action="{% querystring %}">
   {% csrf_token %}
   <div class="panel">
     <div class="panel-head">
@@ -33,7 +33,7 @@
       <span class="hint">{{ page_obj.paginator.count }} siswa</span>
     </div>
     <div class="table-wrap">
-      <table class="data">
+      <table class="data" id="table-ekskul-entry">
         <thead>
           <tr>
             <th class="num" style="width:44px" rowspan="2">No</th>

@@ -23,7 +23,7 @@
   <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
 </form>
 
-<form method="post" action="{% querystring %}">
+<form method="post" id="form-pembagian-mengajar" action="{% querystring %}">
   {% csrf_token %}
   <div class="panel" style="margin-bottom:18px">
     <div class="panel-head"><h3>Wali Kelas</h3><span class="hint">{{ kelas.nama_lengkap|default:"-" }}</span></div>
@@ -49,7 +49,7 @@
       <span class="hint">{{ page_obj.paginator.count }} mapel</span>
     </div>
     <div class="table-wrap">
-      <table class="data">
+      <table class="data" id="table-mengajar">
         <thead>
           <tr>
             <th class="num" style="width:52px">No</th>

@@ -64,8 +64,13 @@ def daftar_siswa(class_group):
     return Student.objects.filter(class_group=class_group, aktif=True).order_by('no_urut')
 
 
-def daftar_mapel():
-    return Subject.objects.all()
+def daftar_mapel(tahun=None):
+    if tahun is None:
+        semester = Semester.get_aktif()
+        tahun = semester.academic_year if semester else None
+    if tahun is None:
+        return Subject.objects.none()
+    return Subject.objects.filter(academic_year=tahun)
 
 
 def nilai_formatif_map(student, subject, semester):
@@ -202,7 +207,7 @@ def data_leger(class_group, semester, students=None):
         students = list(daftar_siswa(class_group))
     else:
         students = list(students)
-    subjects = list(daftar_mapel())
+    subjects = list(daftar_mapel(semester.academic_year))
     nilai = {}
     for obj in SummativeScore.objects.filter(
         student__in=students, semester=semester
@@ -226,7 +231,7 @@ def data_leger(class_group, semester, students=None):
 
 
 def data_rapor(student, semester):
-    subjects = list(daftar_mapel())
+    subjects = list(daftar_mapel(semester.academic_year))
     nilai = nilai_akhir_siswa(student, semester)
     mapel_rows = []
     for mapel in subjects:

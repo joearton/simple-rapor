@@ -1,0 +1,63 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if evaluasi %}Ubah Evaluasi Formatif{% else %}Tambah Evaluasi Formatif{% endif %}{% endblock %}
+{% block topbar %}{% if evaluasi %}Ubah Evaluasi Formatif{% else %}Tambah Evaluasi Formatif{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:formatif_menu' %}">Evaluasi Formatif</a>
+  <span>/</span>
+  <span>{% if evaluasi %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if evaluasi %}{{ evaluasi.nama }}{% else %}Evaluasi Formatif Baru{% endif %}</h2>
+    <p>Rencanakan kuis, latihan, observasi, atau bentuk asesmen formatif lain.</p>
+  </div>
+</div>
+
+<div style="max-width:760px">
+  <form method="post" id="form-evaluasi-formatif" novalidate>
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Data Evaluasi Formatif</h3></div>
+      <div class="panel-body">
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.subject.id_for_label }}">Mata Pelajaran</label>
+            {{ form.subject }}{{ form.subject.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.jenis.id_for_label }}">Jenis</label>
+            {{ form.jenis }}{{ form.jenis.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.nama.id_for_label }}">Nama Evaluasi</label>
+            {{ form.nama }}{{ form.nama.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.tanggal.id_for_label }}">Tanggal</label>
+            {{ form.tanggal }}{{ form.tanggal.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.bobot.id_for_label }}">Bobot (%)</label>
+            {{ form.bobot }}{{ form.bobot.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.deskripsi.id_for_label }}">Deskripsi</label>
+            {{ form.deskripsi }}{{ form.deskripsi.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.aktif.id_for_label }}">Status</label>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">{{ form.aktif }} Aktif</label>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:20px">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Evaluasi</button>
+          <a class="btn" href="{% url 'akademik:formatif_menu' %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

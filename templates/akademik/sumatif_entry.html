@@ -1,7 +1,7 @@
 {% extends 'akademik/base.html' %}
 {% load akademik_extras %}
 {% block title %}Asesmen Sumatif{% endblock %}
-{% block topbar %}Asesmen Sumatif{% endblock %}
+{% block topbar %}Evaluasi Sumatif{% endblock %}
 
 {% block content %}
 <div class="crumb">
@@ -17,7 +17,7 @@
   <div class="actions">
     <a class="btn" href="{% url 'akademik:ekspor' 'sumatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
     <a class="btn" href="{% url 'akademik:impor' 'sumatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
-    <a class="btn" href="{% url 'akademik:sumatif_menu' %}"><svg class="icon"><use href="#i-back"/></svg> Pilih Mapel</a>
+    <a class="btn" href="{% url 'akademik:sumatif_menu' %}"><svg class="icon"><use href="#i-back"/></svg> Daftar Evaluasi</a>
     {% if is_admin_sekolah or is_wali_kelas %}<a class="btn" href="{% url 'akademik:leger' %}"><svg class="icon"><use href="#i-chart"/></svg> Leger</a>{% endif %}
   </div>
 </div>
@@ -32,7 +32,7 @@
     <span class="hint">{{ page_obj.paginator.count }} siswa</span>
   </div>
 
-  <form class="filter-bar" method="get">
+  <form class="filter-bar" id="filter-sumatif-entry" method="get">
     <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
     <select class="form-input" name="status">
       <option value="">Semua siswa</option>

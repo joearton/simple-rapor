@@ -1,0 +1,57 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if tugas %}Ubah TP{% else %}Tambah TP{% endif %}{% endblock %}
+{% block topbar %}{% if tugas %}Ubah Tujuan Pembelajaran{% else %}Tambah Tujuan Pembelajaran{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:tp_menu' %}">Tujuan Pembelajaran</a>
+  <span>/</span>
+  <span>{% if tugas %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if tugas %}TP {{ tugas.nomor }} — {{ tugas.subject.nama }}{% else %}Tujuan Pembelajaran Baru{% endif %}</h2>
+    <p>Tahun pelajaran {{ tahun.tahun|default:"-" }}. TP akan menjadi acuan penilaian formatif dan deskripsi rapor.</p>
+  </div>
+</div>
+
+<div style="max-width:780px">
+  <form method="post" id="form-tp" novalidate>
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Data Tujuan Pembelajaran</h3></div>
+      <div class="panel-body">
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.subject.id_for_label }}">Mata Pelajaran</label>
+            {{ form.subject }}{{ form.subject.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.nomor.id_for_label }}">Nomor TP</label>
+            {{ form.nomor }}{{ form.nomor.errors }}
+            <div class="help">{{ form.nomor.help_text }}</div>
+          </div>
+          <div class="field full">
+            <label for="{{ form.deskripsi.id_for_label }}">Tujuan Pembelajaran / Lingkup Materi</label>
+            {{ form.deskripsi }}{{ form.deskripsi.errors }}
+            <div class="help">Gunakan huruf kecil di awal dan tanpa titik di akhir agar deskripsi rapor rapi.</div>
+          </div>
+          <div class="field">
+            <label for="{{ form.guru.id_for_label }}">Guru Pengampu</label>
+            {{ form.guru }}{{ form.guru.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.aktif.id_for_label }}">Status</label>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">{{ form.aktif }} Aktif</label>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:20px">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan TP</button>
+          <a class="btn" href="{% url 'akademik:tp_menu' %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

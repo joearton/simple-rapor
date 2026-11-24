@@ -10,10 +10,14 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 
+from .audit import catat_audit
 from .forms import (
     AcademicYearForm,
     AdminResetPasswordForm,
+    EvaluasiFormatifForm,
+    EvaluasiSumatifForm,
     ClassGroupForm,
     KelasForm,
     LoginForm,
@@ -24,11 +28,15 @@ from .forms import (
     StudentForm,
     SubjectForm,
     TeacherForm,
+    TujuanPembelajaranForm,
     UserForm,
 )
 from .models import (
     AcademicYear,
+    AuditLog,
     ClassGroup,
+    EvaluasiFormatif,
+    EvaluasiSumatif,
     Extracurricular,
     FormativeScore,
     HomeroomNote,
@@ -49,7 +57,10 @@ from .permissions import (
     get_teacher,
     guru_penilai,
     is_admin,
+    is_kepala_sekolah,
     is_wali_kelas,
+    can_view_reports,
+    super_admin_required,
     mapel_untuk_user,
 )
 from .services import (
@@ -149,8 +160,16 @@ def dashboard(request):
     semester = _semester()
     kelas = _kelas()
     admin = is_admin(request.user)
+    kepala = is_kepala_sekolah(request.user)
     guru = get_teacher(request.user)
-    mapel_qs = list(mapel_untuk_user(request.user))
+    if kepala:
+        tahun_aktif = semester.academic_year if semester else None
+        mapel_qs = list(
+            Subject.objects.filter(academic_year=tahun_aktif)
+            if tahun_aktif else Subject.objects.none()
+        )
+    else:
+        mapel_qs = list(mapel_untuk_user(request.user))
     siswa_qs = daftar_siswa(kelas)
     total_siswa = siswa_qs.count()
 
@@ -186,6 +205,7 @@ def dashboard(request):
     progres = int(total_terisi / total_target * 100) if total_target else 0
     return render(request, 'akademik/dashboard.html', {
         'admin': admin,
+        'kepala': kepala,
         'guru': guru,
         'mapel_cards': mapel_cards,
         'total_siswa': total_siswa,
@@ -202,7 +222,7 @@ def dashboard(request):
 
 
 @login_required
-@admin_required
+@super_admin_required
 def identitas(request):
     school = School.get_solo()
     kelas = _kelas()
@@ -217,6 +237,10 @@ def identitas(request):
                 form.save()
                 if kelas_form is not None:
                     kelas_form.save()
+            catat_audit(
+                request.user, 'UPDATE', school,
+                deskripsi='Perbarui identitas/pengaturan sekolah', request=request,
+            )
             messages.success(request, 'Identitas dan pengaturan sekolah berhasil disimpan.')
             return redirect('akademik:identitas')
         messages.error(request, 'Periksa kembali isian identitas.')
@@ -234,7 +258,7 @@ def identitas(request):
 
 @login_required
 def siswa_list(request):
-    if not (is_admin(request.user) or is_wali_kelas(request.user)):
+    if not can_view_reports(request.user):
         return _tolak_halaman(request)
     kelas = _kelas()
     if kelas:
@@ -458,6 +482,11 @@ def formatif_entry(request, subject_id):
                         defaults={'nilai': int(angka), 'guru': guru},
                     )
                     jumlah += 1
+        catat_audit(
+            request.user, 'UPDATE', subject,
+            deskripsi=f'Simpan nilai formatif {subject.nama}: {jumlah} nilai',
+            request=request,
+        )
         messages.success(request, f'Nilai formatif disimpan ({jumlah} nilai terisi).')
         return redirect(request.get_full_path())
 
@@ -543,6 +572,10 @@ def sumatif_entry(request, subject_id):
                     student=siswa, subject=subject, semester=semester,
                     defaults={'sts': sts, 'sas_non_tes': non_tes, 'sas_tes': tes, 'guru': guru},
                 )
+        catat_audit(
+            request.user, 'UPDATE', subject,
+            deskripsi=f'Simpan nilai sumatif {subject.nama}', request=request,
+        )
         messages.success(request, 'Nilai sumatif disimpan.')
         return redirect(request.get_full_path())
 
@@ -595,7 +628,7 @@ def catatan_entry(request):
                     student=siswa, semester=semester,
                     defaults={
                         'catatan': catatan, 'sakit': sakit, 'izin': izin, 'alpa': alpa,
-                        'guru': guru,
+                        'guru': guru, 'academic_year': semester.academic_year,
                     },
                 )
         messages.success(request, 'Catatan dan absensi disimpan.')
@@ -656,7 +689,7 @@ def ekskul_entry(request):
                         student=siswa, semester=semester, urutan=urutan,
                         defaults={
                             'nama': nama, 'predikat': predikat, 'deskripsi': deskripsi,
-                            'guru': guru,
+                            'guru': guru, 'academic_year': semester.academic_year,
                         },
                     )
         messages.success(request, 'Data ekstrakurikuler disimpan.')
@@ -682,7 +715,7 @@ def ekskul_entry(request):
 
 @login_required
 def leger(request):
-    if not (is_admin(request.user) or is_wali_kelas(request.user)):
+    if not can_view_reports(request.user):
         return _tolak_halaman(request)
     class_group = _kelas()
     semester = _semester()
@@ -704,7 +737,7 @@ def leger(request):
 
 @login_required
 def rapor_index(request):
-    if not (is_admin(request.user) or is_wali_kelas(request.user)):
+    if not can_view_reports(request.user):
         return _tolak_halaman(request)
     kelas = _kelas()
     q = _q(request)
@@ -724,7 +757,7 @@ def rapor_index(request):
 
 @login_required
 def rapor_detail(request, student_id):
-    if not (is_admin(request.user) or is_wali_kelas(request.user)):
+    if not can_view_reports(request.user):
         return _tolak_halaman(request)
     student = get_object_or_404(Student, pk=student_id)
     data = data_rapor(student, _semester())
@@ -733,7 +766,7 @@ def rapor_detail(request, student_id):
 
 @login_required
 def rapor_sampul(request, student_id):
-    if not (is_admin(request.user) or is_wali_kelas(request.user)):
+    if not can_view_reports(request.user):
         return _tolak_halaman(request)
     student = get_object_or_404(Student, pk=student_id)
     return render(request, 'akademik/rapor_sampul.html', {
@@ -745,7 +778,7 @@ def rapor_sampul(request, student_id):
 
 @login_required
 def cetak_semua(request):
-    if not (is_admin(request.user) or is_wali_kelas(request.user)):
+    if not can_view_reports(request.user):
         return _tolak_halaman(request)
     semester = _semester()
     students = daftar_siswa(_kelas())
@@ -797,7 +830,7 @@ def guru_list(request):
         'status_filter': status,
         'mapel_filter': mapel_id,
         'wali_filter': wali,
-        'subjects': Subject.objects.all(),
+        'subjects': daftar_mapel(),
     })
 
 
@@ -835,8 +868,11 @@ def guru_hapus(request, pk):
 def mapel_list(request):
     kelas = _kelas()
     semester = _semester()
-    tahun = semester.academic_year if semester else AcademicYear.get_aktif()
-    subjects = Subject.objects.annotate(
+    tahun_aktif = semester.academic_year if semester else AcademicYear.get_aktif()
+    tahun_id = request.GET.get('tahun') or (tahun_aktif.id if tahun_aktif else '')
+    tahun = AcademicYear.objects.filter(pk=tahun_id).first() if tahun_id else None
+    subjects = Subject.objects.filter(academic_year=tahun) if tahun else Subject.objects.none()
+    subjects = subjects.annotate(
         jumlah_tp=Count(
             'tujuan_list',
             filter=Q(tujuan_list__academic_year=tahun, tujuan_list__aktif=True),
@@ -845,14 +881,16 @@ def mapel_list(request):
     q = _q(request)
     guru_id = request.GET.get('guru') or ''
     if q:
-        subjects = subjects.filter(nama__icontains=q)
-    if guru_id and kelas:
+        subjects = subjects.filter(
+            Q(nama__icontains=q) | Q(kode__icontains=q) | Q(deskripsi__icontains=q)
+        )
+    if guru_id and kelas and tahun == tahun_aktif:
         subjects = subjects.filter(
             penugasan__teacher_id=guru_id, penugasan__class_group=kelas
         ).distinct()
     page_obj = _paginate(request, subjects.order_by('urutan', 'nama'))
     penugasan = {}
-    if kelas:
+    if kelas and tahun == tahun_aktif:
         for p in TeachingAssignment.objects.filter(
             class_group=kelas, subject__in=page_obj.object_list
         ).select_related('teacher', 'subject'):
@@ -865,6 +903,9 @@ def mapel_list(request):
         'q': q,
         'guru_filter': guru_id,
         'teachers': Teacher.objects.filter(aktif=True),
+        'tahun': tahun,
+        'tahun_id': str(tahun.id) if tahun else '',
+        'daftar_tahun': AcademicYear.objects.all(),
     })
 
 
@@ -877,9 +918,17 @@ def mapel_form(request, pk=None):
         if form.is_valid():
             obj = form.save()
             messages.success(request, f'Mata pelajaran {obj.nama} disimpan.')
-            return redirect('akademik:mapel_list')
+            return redirect(f"{reverse('akademik:mapel_list')}?tahun={obj.academic_year_id}")
     else:
-        form = SubjectForm(instance=subject)
+        initial = {}
+        tahun_id = request.GET.get('tahun')
+        if tahun_id:
+            initial['academic_year'] = tahun_id
+        elif not subject:
+            tahun = _semester().academic_year if _semester() else AcademicYear.get_aktif()
+            if tahun:
+                initial['academic_year'] = tahun
+        form = SubjectForm(instance=subject, initial=initial)
     return render(request, 'akademik/mapel_form.html', {'form': form, 'subject': subject})
 
 
@@ -977,7 +1026,7 @@ def profil(request):
 
 
 @login_required
-@admin_required
+@super_admin_required
 def pengguna_list(request):
     qs = User.objects.order_by('username')
     q = _q(request)
@@ -990,6 +1039,10 @@ def pengguna_list(request):
         )
     if role == 'admin':
         qs = qs.filter(Q(is_staff=True) | Q(is_superuser=True))
+    elif role == 'kepala':
+        qs = qs.filter(groups__name='Kepala Sekolah')
+    elif role == 'operator':
+        qs = qs.filter(groups__name='Operator/Tata Usaha')
     elif role == 'guru':
         qs = qs.filter(guru__isnull=False).exclude(Q(is_staff=True) | Q(is_superuser=True))
     elif role == 'pengguna':
@@ -1019,26 +1072,30 @@ def pengguna_list(request):
 
 
 @login_required
-@admin_required
+@super_admin_required
 def pengguna_form(request, pk=None):
     target = get_object_or_404(User, pk=pk) if pk else None
     if request.method == 'POST':
         form = UserForm(request.POST, instance=target)
         if form.is_valid():
             role = form.cleaned_data['role']
-            if target == request.user and role != 'admin':
+            if target == request.user and role != 'super_admin':
                 form.add_error('role', 'Anda tidak dapat menurunkan peran akun sendiri.')
             elif target == request.user and not form.cleaned_data.get('is_active'):
                 form.add_error('is_active', 'Anda tidak dapat menonaktifkan akun sendiri.')
             elif (
                 target
                 and target.is_superuser
-                and role != 'admin'
+                and role != 'super_admin'
                 and not User.objects.filter(is_superuser=True).exclude(pk=target.pk).exists()
             ):
                 form.add_error('role', 'Harus ada minimal satu administrator.')
             else:
                 obj = form.save()
+                catat_audit(
+                    request.user, 'UPDATE' if target else 'CREATE', obj,
+                    deskripsi=f'Akun {obj.username} disimpan', request=request,
+                )
                 messages.success(request, f'Akun {obj.username} disimpan.')
                 return redirect('akademik:pengguna_list')
     else:
@@ -1047,7 +1104,7 @@ def pengguna_form(request, pk=None):
 
 
 @login_required
-@admin_required
+@super_admin_required
 def pengguna_reset_password(request, pk):
     target = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
@@ -1056,6 +1113,10 @@ def pengguna_reset_password(request, pk):
             form.save()
             if target == request.user:
                 update_session_auth_hash(request, target)
+            catat_audit(
+                request.user, 'UPDATE', target,
+                deskripsi=f'Reset password akun {target.username}', request=request,
+            )
             messages.success(request, f'Password akun {target.username} berhasil direset.')
             return redirect('akademik:pengguna_list')
     else:
@@ -1067,7 +1128,7 @@ def pengguna_reset_password(request, pk):
 
 
 @login_required
-@admin_required
+@super_admin_required
 def pengguna_hapus(request, pk):
     target = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
@@ -1077,6 +1138,10 @@ def pengguna_hapus(request, pk):
             messages.error(request, 'Harus ada minimal satu administrator.')
         else:
             username = target.username
+            catat_audit(
+                request.user, 'DELETE', target,
+                deskripsi=f'Hapus akun {username}', request=request,
+            )
             target.delete()
             messages.success(request, f'Akun {username} dihapus.')
     return redirect('akademik:pengguna_list')
@@ -1168,6 +1233,12 @@ def tahun_list(request):
             ).count(),
             'jumlah_ekskul': Extracurricular.objects.filter(
                 semester__academic_year=tahun
+            ).count(),
+            'jumlah_eval_formatif': EvaluasiFormatif.objects.filter(
+                subject__academic_year=tahun
+            ).count(),
+            'jumlah_eval_sumatif': EvaluasiSumatif.objects.filter(
+                subject__academic_year=tahun
             ).count(),
         })
     return render(request, 'akademik/tahun_list.html', {
@@ -1336,7 +1407,7 @@ def _boleh_ekspor_impor(request, kind, subject=None):
     if kind in ('catatan', 'ekskul'):
         return can_manage_homeroom(request.user, _kelas())
     if kind == 'leger':
-        return is_admin(request.user) or is_wali_kelas(request.user)
+        return can_view_reports(request.user)
     return False
 
 
@@ -1384,6 +1455,9 @@ def ekspor_data(request, kind):
     if kind == 'guru':
         return excel_io.export_guru(kelas, template)
     if kind == 'mapel':
+        tahun_id = request.GET.get('tahun')
+        if tahun_id:
+            tahun = AcademicYear.objects.filter(pk=tahun_id).first() or tahun
         return excel_io.export_mapel(kelas, tahun, template)
     if kind == 'tp':
         return excel_io.export_tp(subject, tahun, template)
@@ -1473,3 +1547,332 @@ def impor_data(request, kind):
         return redirect(back)
 
     return render(request, 'akademik/import_data.html', ctx)
+
+
+# ---------------- Tujuan Pembelajaran & Evaluasi (daftar/CRUD) ----------------
+
+def _tahun_aktif():
+    semester = _semester()
+    return semester.academic_year if semester else AcademicYear.get_aktif()
+
+
+def _mapel_boleh(user):
+    return mapel_untuk_user(user)
+
+
+def _mapel_dalam_queryset(user, subject):
+    return _mapel_boleh(user).filter(pk=subject.pk).exists()
+
+
+@login_required
+def tugas_list(request, subject_id=None):
+    tahun = _tahun_aktif()
+    allowed = _mapel_boleh(request.user)
+    mapel_filter = ''
+    if subject_id:
+        subject = get_object_or_404(allowed, pk=subject_id)
+        mapel_filter = str(subject.id)
+    else:
+        mapel_filter = request.GET.get('mapel') or ''
+    q = _q(request)
+    status = request.GET.get('status') or 'aktif'
+    qs = LearningObjective.objects.filter(
+        academic_year=tahun, subject__in=allowed
+    ).select_related('subject', 'guru')
+    if mapel_filter:
+        qs = qs.filter(subject_id=mapel_filter)
+    if q:
+        qs = qs.filter(
+            Q(deskripsi__icontains=q)
+        )
+    if status == 'aktif':
+        qs = qs.filter(aktif=True)
+    elif status == 'arsip':
+        qs = qs.filter(aktif=False)
+    page_obj = _paginate(request, qs.order_by('subject__urutan', 'nomor'))
+
+    if request.method == 'POST':
+        aksi = request.POST.get('aksi')
+        if aksi in ('hapus', 'aktifkan'):
+            tp = get_object_or_404(LearningObjective, pk=request.POST.get('tp_id'))
+            if tp.academic_year_id != (tahun.id if tahun else None) or not _mapel_dalam_queryset(
+                request.user, tp.subject
+            ):
+                return _tolak_mapel(request)
+            if aksi == 'aktifkan':
+                tp.aktif = True
+                tp.save(update_fields=['aktif'])
+                messages.success(request, 'Tujuan pembelajaran diaktifkan kembali.')
+            elif tp.nilai_formatif.exists():
+                tp.aktif = False
+                tp.save(update_fields=['aktif'])
+                messages.success(
+                    request,
+                    'TP memiliki nilai sehingga diarsipkan, bukan dihapus.',
+                )
+            else:
+                tp.delete()
+                messages.success(request, 'Tujuan pembelajaran dihapus.')
+            return redirect(request.get_full_path())
+
+    return render(request, 'akademik/tp_list.html', {
+        'objectives': page_obj,
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'subjects': allowed.annotate(
+            jumlah_tugas=Count(
+                'tujuan_list',
+                filter=Q(tujuan_list__academic_year=tahun),
+            )
+        ),
+        'mapel_filter': mapel_filter,
+        'q': q,
+        'status_filter': status,
+        'tahun': tahun,
+    })
+
+
+@login_required
+def tugas_form(request, pk=None):
+    tahun = _tahun_aktif()
+    allowed = _mapel_boleh(request.user)
+    instance = get_object_or_404(LearningObjective, pk=pk) if pk else None
+    if instance and (
+        instance.academic_year_id != (tahun.id if tahun else None)
+        or not _mapel_dalam_queryset(request.user, instance.subject)
+    ):
+        return _tolak_mapel(request)
+
+    if request.method == 'POST':
+        form = TujuanPembelajaranForm(request.POST, instance=instance)
+        form.fields['subject'].queryset = allowed
+        if form.is_valid():
+            subject = form.cleaned_data['subject']
+            if not _mapel_dalam_queryset(request.user, subject):
+                return _tolak_mapel(request)
+            obj = form.save(commit=False)
+            obj.academic_year = subject.academic_year
+            if not obj.nomor:
+                obj.nomor = (
+                    LearningObjective.objects.filter(
+                        subject=subject, academic_year=subject.academic_year
+                    ).order_by('-nomor').values_list('nomor', flat=True).first()
+                    or 0
+                ) + 1
+            bentrok = LearningObjective.objects.filter(
+                subject=subject,
+                academic_year=subject.academic_year,
+                nomor=obj.nomor,
+            ).exclude(pk=obj.pk)
+            if bentrok.exists():
+                form.add_error('nomor', 'Nomor tugas sudah dipakai pada mapel ini.')
+            else:
+                if not obj.guru_id:
+                    obj.guru = guru_penilai(request.user, subject)
+                obj.save()
+                messages.success(request, 'Tujuan pembelajaran disimpan.')
+                return redirect(f"{reverse('akademik:tp_menu')}?mapel={subject.id}")
+    else:
+        initial = {}
+        mapel_id = request.GET.get('mapel')
+        if mapel_id:
+            subject = allowed.filter(pk=mapel_id).first()
+            if subject:
+                initial['subject'] = subject
+                initial['guru'] = guru_penilai(request.user, subject)
+        form = TujuanPembelajaranForm(instance=instance, initial=initial)
+        form.fields['subject'].queryset = allowed
+    return render(request, 'akademik/tp_form.html', {
+        'form': form,
+        'tugas': instance,
+        'tahun': tahun,
+    })
+
+
+@login_required
+def evaluasi_formatif_list(request):
+    tahun = _tahun_aktif()
+    allowed = _mapel_boleh(request.user)
+    q = _q(request)
+    mapel_filter = request.GET.get('mapel') or ''
+    jenis = request.GET.get('jenis') or ''
+    status = request.GET.get('status') or ''
+    qs = EvaluasiFormatif.objects.filter(subject__in=allowed).select_related('subject')
+    if mapel_filter:
+        qs = qs.filter(subject_id=mapel_filter)
+    if q:
+        qs = qs.filter(Q(nama__icontains=q) | Q(deskripsi__icontains=q))
+    if jenis:
+        qs = qs.filter(jenis=jenis)
+    if status == 'aktif':
+        qs = qs.filter(aktif=True)
+    elif status == 'nonaktif':
+        qs = qs.filter(aktif=False)
+    page_obj = _paginate(request, qs.order_by('subject__urutan', 'nama'))
+    return render(request, 'akademik/evaluasi_formatif_list.html', {
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'subjects': allowed,
+        'mapel_filter': mapel_filter,
+        'jenis_filter': jenis,
+        'status_filter': status,
+        'jenis_choices': EvaluasiFormatif.JENIS,
+        'q': q,
+        'tahun': tahun,
+    })
+
+
+@login_required
+def evaluasi_formatif_form(request, pk=None):
+    allowed = _mapel_boleh(request.user)
+    instance = get_object_or_404(EvaluasiFormatif, pk=pk) if pk else None
+    if instance and not _mapel_dalam_queryset(request.user, instance.subject):
+        return _tolak_mapel(request)
+    if request.method == 'POST':
+        form = EvaluasiFormatifForm(request.POST, instance=instance)
+        form.fields['subject'].queryset = allowed
+        if form.is_valid():
+            obj = form.save()
+            messages.success(request, 'Evaluasi formatif disimpan.')
+            return redirect(f"{reverse('akademik:formatif_menu')}?mapel={obj.subject_id}")
+    else:
+        initial = {}
+        mapel_id = request.GET.get('mapel')
+        if mapel_id:
+            subject = allowed.filter(pk=mapel_id).first()
+            if subject:
+                initial['subject'] = subject
+        form = EvaluasiFormatifForm(instance=instance, initial=initial)
+        form.fields['subject'].queryset = allowed
+    return render(request, 'akademik/evaluasi_formatif_form.html', {
+        'form': form,
+        'evaluasi': instance,
+    })
+
+
+@login_required
+def evaluasi_formatif_hapus(request, pk):
+    evaluasi = get_object_or_404(EvaluasiFormatif, pk=pk)
+    if not _mapel_dalam_queryset(request.user, evaluasi.subject):
+        return _tolak_mapel(request)
+    if request.method == 'POST':
+        nama = evaluasi.nama
+        evaluasi.delete()
+        messages.success(request, f'Evaluasi formatif "{nama}" dihapus.')
+    return redirect('akademik:formatif_menu')
+
+
+@login_required
+def evaluasi_sumatif_list(request):
+    tahun = _tahun_aktif()
+    allowed = _mapel_boleh(request.user)
+    q = _q(request)
+    mapel_filter = request.GET.get('mapel') or ''
+    jenis = request.GET.get('jenis') or ''
+    status = request.GET.get('status') or ''
+    qs = EvaluasiSumatif.objects.filter(subject__in=allowed).select_related('subject')
+    if mapel_filter:
+        qs = qs.filter(subject_id=mapel_filter)
+    if q:
+        qs = qs.filter(Q(nama__icontains=q) | Q(deskripsi__icontains=q))
+    if jenis:
+        qs = qs.filter(jenis=jenis)
+    if status == 'aktif':
+        qs = qs.filter(aktif=True)
+    elif status == 'nonaktif':
+        qs = qs.filter(aktif=False)
+    page_obj = _paginate(request, qs.order_by('subject__urutan', 'nama'))
+    return render(request, 'akademik/evaluasi_sumatif_list.html', {
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'subjects': allowed,
+        'mapel_filter': mapel_filter,
+        'jenis_filter': jenis,
+        'status_filter': status,
+        'jenis_choices': EvaluasiSumatif.JENIS,
+        'q': q,
+        'tahun': tahun,
+    })
+
+
+@login_required
+def evaluasi_sumatif_form(request, pk=None):
+    allowed = _mapel_boleh(request.user)
+    instance = get_object_or_404(EvaluasiSumatif, pk=pk) if pk else None
+    if instance and not _mapel_dalam_queryset(request.user, instance.subject):
+        return _tolak_mapel(request)
+    if request.method == 'POST':
+        form = EvaluasiSumatifForm(request.POST, instance=instance)
+        form.fields['subject'].queryset = allowed
+        if form.is_valid():
+            obj = form.save()
+            messages.success(request, 'Evaluasi sumatif disimpan.')
+            return redirect(f"{reverse('akademik:sumatif_menu')}?mapel={obj.subject_id}")
+    else:
+        initial = {}
+        mapel_id = request.GET.get('mapel')
+        if mapel_id:
+            subject = allowed.filter(pk=mapel_id).first()
+            if subject:
+                initial['subject'] = subject
+        form = EvaluasiSumatifForm(instance=instance, initial=initial)
+        form.fields['subject'].queryset = allowed
+    return render(request, 'akademik/evaluasi_sumatif_form.html', {
+        'form': form,
+        'evaluasi': instance,
+    })
+
+
+@login_required
+def evaluasi_sumatif_hapus(request, pk):
+    evaluasi = get_object_or_404(EvaluasiSumatif, pk=pk)
+    if not _mapel_dalam_queryset(request.user, evaluasi.subject):
+        return _tolak_mapel(request)
+    if request.method == 'POST':
+        nama = evaluasi.nama
+        evaluasi.delete()
+        messages.success(request, f'Evaluasi sumatif "{nama}" dihapus.')
+    return redirect('akademik:sumatif_menu')
+
+
+@login_required
+@super_admin_required
+def audit_log(request):
+    q = _q(request)
+    aksi = request.GET.get('aksi') or ''
+    qs = AuditLog.objects.select_related('user')
+    if q:
+        qs = qs.filter(
+            Q(deskripsi__icontains=q) | Q(model__icontains=q)
+            | Q(user__username__icontains=q)
+        )
+    if aksi:
+        qs = qs.filter(aksi=aksi)
+    page_obj = _paginate(request, qs)
+    return render(request, 'akademik/audit_log.html', {
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'q': q,
+        'aksi_filter': aksi,
+        'aksi_choices': AuditLog.AKSI,
+    })
+
+
+@login_required
+def pilih_tahun_pelajaran(request):
+    if not (is_admin(request.user) or is_kepala_sekolah(request.user)):
+        messages.error(request, 'Anda tidak memiliki akses mengganti periode aktif.')
+        return redirect('akademik:dashboard')
+    if request.method != 'POST':
+        return redirect('akademik:dashboard')
+    tahun = get_object_or_404(AcademicYear, pk=request.POST.get('tahun'))
+    _aktifkan_tahun_internal(tahun)
+    catat_audit(
+        request.user, 'ACTIVATE', tahun,
+        deskripsi=f'Mengaktifkan tahun pelajaran {tahun.tahun}', request=request,
+    )
+    messages.success(request, f'Periode aktif diubah ke {tahun.tahun}.')
+    next_url = request.POST.get('next') or ''
+    if not next_url.startswith('/') or next_url.startswith('//'):
+        next_url = reverse('akademik:dashboard')
+    return redirect(next_url)

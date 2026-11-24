@@ -16,15 +16,29 @@
 </div>
 
 <div style="max-width:640px">
-  <form method="post" novalidate>
+  <form method="post" id="form-mapel" novalidate>
     {% csrf_token %}
     <div class="panel">
       <div class="panel-head"><h3>Data Mata Pelajaran</h3></div>
       <div class="panel-body">
         {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid" style="margin-bottom:14px">
+          <div class="field">
+            <label for="{{ form.academic_year.id_for_label }}">Tahun Pelajaran</label>
+            {{ form.academic_year }}{{ form.academic_year.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.kode.id_for_label }}">Kode Mapel</label>
+            {{ form.kode }}{{ form.kode.errors }}
+          </div>
+        </div>
         <div class="field" style="margin-bottom:14px">
           <label for="{{ form.nama.id_for_label }}">Nama Mata Pelajaran</label>
           {{ form.nama }}{{ form.nama.errors }}
+        </div>
+        <div class="field" style="margin-bottom:14px">
+          <label for="{{ form.deskripsi.id_for_label }}">Deskripsi</label>
+          {{ form.deskripsi }}{{ form.deskripsi.errors }}
         </div>
         <div class="field" style="margin-bottom:18px">
           <label for="{{ form.urutan.id_for_label }}">Urutan</label>

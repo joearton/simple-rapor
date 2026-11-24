@@ -33,9 +33,9 @@
   <symbol id="i-badge" viewBox="0 0 24 24"><circle cx="12" cy="9" r="5"/><path d="m8.5 13-2 8 5.5-3 5.5 3-2-8"/></symbol>
 </svg>
 
-<div class="layout">
-  <aside class="sidebar">
-    <div class="brand">
+<div class="layout" id="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand" id="app-brand">
       <div class="brand-mark">SMPM</div>
       <div class="brand-text">
         <strong>Rapor Kurikulum Merdeka</strong>
@@ -44,40 +44,43 @@
     </div>
 
     {% with active=request.resolver_match.url_name %}
-    <nav class="nav">
+    <nav class="nav" id="main-nav">
       <div class="nav-label">Utama</div>
       <a href="{% url 'akademik:dashboard' %}" class="{% if active == 'dashboard' %}active{% endif %}"><svg class="icon"><use href="#i-home"/></svg> Beranda</a>
-      {% if is_admin_sekolah or is_wali_kelas %}
+      {% if is_admin_sekolah or is_wali_kelas or is_kepala_sekolah %}
       <a href="{% url 'akademik:siswa_list' %}" class="{% if active == 'siswa_list' or active == 'siswa_tambah' or active == 'siswa_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-users"/></svg> Data Siswa</a>
       {% endif %}
-      {% if is_admin_sekolah %}
+      {% if is_super_admin_sekolah %}
       <a href="{% url 'akademik:identitas' %}" class="{% if active == 'identitas' %}active{% endif %}"><svg class="icon"><use href="#i-school"/></svg> Identitas Sekolah</a>
+      {% endif %}
+      {% if is_admin_sekolah %}
       <a href="{% url 'akademik:guru_list' %}" class="{% if active == 'guru_list' or active == 'guru_tambah' or active == 'guru_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-user"/></svg> Data Guru</a>
       <a href="{% url 'akademik:mapel_list' %}" class="{% if active == 'mapel_list' or active == 'mapel_tambah' or active == 'mapel_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-book"/></svg> Mata Pelajaran</a>
       <a href="{% url 'akademik:mengajar' %}" class="{% if active == 'mengajar' %}active{% endif %}"><svg class="icon"><use href="#i-badge"/></svg> Pembagian Mengajar</a>
+      <a href="{% url 'akademik:tahun_list' %}" class="{% if active == 'tahun_list' or active == 'tahun_tambah' or active == 'tahun_ubah' or active == 'semester_tambah' or active == 'semester_ubah' or active == 'kelas_tambah' or active == 'kelas_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-calendar"/></svg> Tahun Pelajaran</a>
       {% endif %}
 
       {% if is_admin_sekolah or guru_login %}
       <div class="nav-label">Penilaian</div>
-      <a href="{% url 'akademik:tp_menu' %}" class="{% if active == 'tp_menu' or active == 'tp_list' %}active{% endif %}"><svg class="icon"><use href="#i-target"/></svg> Tujuan Pembelajaran</a>
-      <a href="{% url 'akademik:formatif_menu' %}" class="{% if active == 'formatif_menu' or active == 'formatif_entry' %}active{% endif %}"><svg class="icon"><use href="#i-clipboard"/></svg> Asesmen Formatif</a>
-      <a href="{% url 'akademik:sumatif_menu' %}" class="{% if active == 'sumatif_menu' or active == 'sumatif_entry' %}active{% endif %}"><svg class="icon"><use href="#i-chart"/></svg> Asesmen Sumatif</a>
+      <a href="{% url 'akademik:tp_menu' %}" class="{% if active == 'tp_menu' or active == 'tp_list' or active == 'tp_tambah' or active == 'tp_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-target"/></svg> Tujuan Pembelajaran</a>
+      <a href="{% url 'akademik:formatif_menu' %}" class="{% if active == 'formatif_menu' or active == 'formatif_entry' or active == 'formatif_evaluasi_tambah' or active == 'formatif_evaluasi_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-clipboard"/></svg> Evaluasi Formatif</a>
+      <a href="{% url 'akademik:sumatif_menu' %}" class="{% if active == 'sumatif_menu' or active == 'sumatif_entry' or active == 'sumatif_evaluasi_tambah' or active == 'sumatif_evaluasi_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-chart"/></svg> Evaluasi Sumatif</a>
       {% endif %}
       {% if is_admin_sekolah or is_wali_kelas %}
       <a href="{% url 'akademik:catatan_entry' %}" class="{% if active == 'catatan_entry' %}active{% endif %}"><svg class="icon"><use href="#i-calendar"/></svg> Catatan &amp; Absensi</a>
       <a href="{% url 'akademik:ekskul_entry' %}" class="{% if active == 'ekskul_entry' %}active{% endif %}"><svg class="icon"><use href="#i-trophy"/></svg> Ekstrakurikuler</a>
       {% endif %}
 
-      {% if is_admin_sekolah or is_wali_kelas %}
+      {% if is_admin_sekolah or is_wali_kelas or is_kepala_sekolah %}
       <div class="nav-label">Laporan</div>
       <a href="{% url 'akademik:leger' %}" class="{% if active == 'leger' %}active{% endif %}"><svg class="icon"><use href="#i-chart"/></svg> Leger Nilai</a>
       <a href="{% url 'akademik:rapor_index' %}" class="{% if active == 'rapor_index' or active == 'rapor_detail' or active == 'rapor_sampul' or active == 'cetak_semua' %}active{% endif %}"><svg class="icon"><use href="#i-printer"/></svg> Cetak Rapor</a>
       {% endif %}
 
-      {% if is_admin_sekolah %}
+      {% if is_super_admin_sekolah %}
       <div class="nav-label">Pengaturan</div>
-      <a href="{% url 'akademik:tahun_list' %}" class="{% if active == 'tahun_list' or active == 'tahun_tambah' or active == 'tahun_ubah' or active == 'semester_tambah' or active == 'semester_ubah' or active == 'kelas_tambah' or active == 'kelas_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-calendar"/></svg> Tahun Pelajaran</a>
       <a href="{% url 'akademik:pengguna_list' %}" class="{% if active == 'pengguna_list' or active == 'pengguna_tambah' or active == 'pengguna_ubah' or active == 'pengguna_reset_password' %}active{% endif %}"><svg class="icon"><use href="#i-users"/></svg> Manajemen Pengguna</a>
+      <a href="{% url 'akademik:audit_log' %}" class="{% if active == 'audit_log' %}active{% endif %}"><svg class="icon"><use href="#i-file"/></svg> Audit Log</a>
       {% endif %}
     </nav>
     {% endwith %}
@@ -88,31 +91,42 @@
     </div>
   </aside>
 
-  <div class="main">
-    <header class="topbar">
+  <div class="main" id="main-panel">
+    <header class="topbar" id="topbar">
       <div>
-        <h1>{% block topbar %}Aplikasi Penilaian &amp; Rapor{% endblock %}</h1>
+        <h1 id="page-title">{% block topbar %}Aplikasi Penilaian &amp; Rapor{% endblock %}</h1>
         <div class="sub">{{ sekolah.nama }}{% if kelas_aktif %} &middot; Kelas {{ kelas_aktif.nama_lengkap }}{% endif %}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span class="chip">Semester {{ semester_aktif.nama|default:"-" }} &middot; {{ semester_aktif.academic_year.tahun|default:"-" }}</span>
-        <details class="user-menu">
+        {% if is_admin_sekolah or is_kepala_sekolah %}
+        <form class="period-form" id="period-form" method="post" action="{% url 'akademik:pilih_tahun_pelajaran' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <select name="tahun" id="period-year-select" class="form-input" aria-label="Pilih tahun pelajaran">
+            {% for tahun in daftar_tahun %}
+            <option value="{{ tahun.id }}" {% if semester_aktif.academic_year_id == tahun.id %}selected{% endif %}>{{ tahun.tahun }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-sm">Terapkan</button>
+        </form>
+        {% endif %}
+        <details class="user-menu" id="user-menu">
           <summary>
             <span class="avatar-sm">{% if guru_login %}{{ guru_login.inisial }}{% else %}AD{% endif %}</span>
             <span class="user-menu-text">
               <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
-              <span>{% if is_admin_sekolah %}Administrator{% elif guru_login %}Guru{% else %}Pengguna{% endif %}</span>
+              <span>{{ role_label }}</span>
             </span>
             <svg class="icon" style="width:14px;height:14px"><use href="#i-arrow"/></svg>
           </summary>
-          <div class="user-dropdown">
+          <div class="user-dropdown" id="user-dropdown">
             <div class="ud-head">
               <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
               <span>{{ request.user.username }}</span>
             </div>
             <a href="{% url 'akademik:profil' %}"><svg class="icon"><use href="#i-user"/></svg> Edit Profil</a>
             <a href="{% url 'akademik:ubah_password' %}"><svg class="icon"><use href="#i-key"/></svg> Ubah Password</a>
-            {% if is_admin_sekolah %}
+            {% if is_super_admin_sekolah %}
             <a href="{% url 'akademik:pengguna_list' %}"><svg class="icon"><use href="#i-users"/></svg> Manajemen Pengguna</a>
             <a href="{% url 'admin:index' %}"><svg class="icon"><use href="#i-badge"/></svg> Admin Django</a>
             {% endif %}
@@ -125,7 +139,7 @@
       </div>
     </header>
 
-    <main class="content">
+    <main class="content" id="main-content">
       {% if messages %}
       <div class="messages">
         {% for message in messages %}
@@ -164,6 +178,21 @@
       return panel.querySelector('.errorlist, .alert.error');
     });
     aktifkan(panelError ? panelError.dataset.tabPanel : buttons[0].dataset.tabTarget);
+  });
+
+  document.querySelectorAll('[data-help]').forEach(function (el) {
+    const field = el.closest('.field');
+    if (!field || field.querySelector('.help')) return;
+    const text = (el.dataset.help || '').trim();
+    if (!text) return;
+    const help = document.createElement('div');
+    help.className = 'help';
+    help.textContent = text;
+    if (el.id) {
+      help.id = el.id + '-help';
+      el.setAttribute('aria-describedby', help.id);
+    }
+    field.appendChild(help);
   });
 </script>
 </body>

@@ -6,7 +6,7 @@
 <div class="page-head">
   <div>
     <h2>Catatan &amp; Absensi</h2>
-    <p>Catatan wali kelas dan rekap ketidakhadiran semester {{ semester_aktif.nama|default:"-" }}.{% if guru %} Wali Kelas: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
+    <p>Catatan wali kelas dan rekap ketidakhadiran semester {{ semester_aktif.nama|default:"-" }} tahun pelajaran {{ semester_aktif.academic_year.tahun|default:"-" }}.{% if guru %} Wali Kelas: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
   </div>
   <div class="actions">
     <a class="btn" href="{% url 'akademik:ekspor' 'catatan' %}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
@@ -25,7 +25,7 @@
   <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
 </form>
 
-<form method="post" action="{% querystring %}">
+<form method="post" id="form-catatan" action="{% querystring %}">
   {% csrf_token %}
   <div class="panel">
     <div class="panel-head">
@@ -33,7 +33,7 @@
       <span class="hint">{{ page_obj.paginator.count }} siswa</span>
     </div>
     <div class="table-wrap">
-      <table class="data">
+      <table class="data" id="table-catatan-entry">
         <thead>
           <tr>
             <th class="num" style="width:48px">No</th>

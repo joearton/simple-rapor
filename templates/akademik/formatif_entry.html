@@ -1,6 +1,6 @@
 {% extends 'akademik/base.html' %}
 {% block title %}Asesmen Formatif{% endblock %}
-{% block topbar %}Asesmen Formatif{% endblock %}
+{% block topbar %}Evaluasi Formatif{% endblock %}
 
 {% block content %}
 <div class="crumb">
@@ -16,8 +16,8 @@
   <div class="actions">
     <a class="btn" href="{% url 'akademik:ekspor' 'formatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
     <a class="btn" href="{% url 'akademik:impor' 'formatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
-    <a class="btn" href="{% url 'akademik:formatif_menu' %}"><svg class="icon"><use href="#i-back"/></svg> Pilih Mapel</a>
-    <a class="btn" href="{% url 'akademik:tp_list' subject.id %}"><svg class="icon"><use href="#i-target"/></svg> Kelola TP</a>
+    <a class="btn" href="{% url 'akademik:formatif_menu' %}"><svg class="icon"><use href="#i-back"/></svg> Daftar Evaluasi</a>
+    <a class="btn" href="{% url 'akademik:tp_list' subject.id %}"><svg class="icon"><use href="#i-target"/></svg> Daftar TP</a>
   </div>
 </div>
 
@@ -32,7 +32,7 @@
     <span class="hint">{{ page_obj.paginator.count }} siswa &middot; {{ objectives|length }} TP</span>
   </div>
 
-  <form class="filter-bar" method="get">
+  <form class="filter-bar" id="filter-formatif-entry" method="get">
     <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
     <select class="form-input" name="status">
       <option value="">Semua siswa</option>

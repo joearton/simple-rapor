@@ -2,7 +2,10 @@ from django.contrib import admin
 
 from .models import (
     AcademicYear,
+    AuditLog,
     ClassGroup,
+    EvaluasiFormatif,
+    EvaluasiSumatif,
     Extracurricular,
     FormativeScore,
     HomeroomNote,
@@ -54,7 +57,8 @@ class LearningObjectiveInline(admin.TabularInline):
 
 @admin.register(Subject)
 class SubjectAdmin(admin.ModelAdmin):
-    list_display = ('urutan', 'nama')
+    list_display = ('urutan', 'kode', 'nama', 'academic_year')
+    list_filter = ('academic_year',)
     list_editable = ('nama',)
     inlines = [LearningObjectiveInline]
 
@@ -111,3 +115,34 @@ class HomeroomNoteAdmin(admin.ModelAdmin):
 class ExtracurricularAdmin(admin.ModelAdmin):
     list_display = ('student', 'urutan', 'nama', 'predikat', 'guru')
     list_filter = ('semester', 'guru')
+
+
+@admin.register(EvaluasiFormatif)
+class EvaluasiFormatifAdmin(admin.ModelAdmin):
+    list_display = ('nama', 'subject', 'jenis', 'tanggal', 'bobot', 'aktif')
+    list_filter = ('jenis', 'aktif', 'subject')
+    search_fields = ('nama', 'deskripsi')
+
+
+@admin.register(EvaluasiSumatif)
+class EvaluasiSumatifAdmin(admin.ModelAdmin):
+    list_display = ('nama', 'subject', 'jenis', 'tanggal', 'bobot', 'aktif')
+    list_filter = ('jenis', 'aktif', 'subject')
+    search_fields = ('nama', 'deskripsi')
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'user', 'aksi', 'model', 'object_id', 'deskripsi')
+    list_filter = ('aksi', 'model', 'created_at')
+    search_fields = ('deskripsi', 'object_id', 'user__username')
+    readonly_fields = [f.name for f in AuditLog._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser

@@ -23,7 +23,7 @@
     <h3>Daftar Peserta Didik</h3>
     <span class="hint">{{ total }} data</span>
   </div>
-  <form class="filter-bar" method="get">
+  <form class="filter-bar" id="filter-siswa-list" method="get">
     <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
     <select class="form-input" name="jk">
       <option value="">Semua L/P</option>
@@ -39,7 +39,7 @@
     <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
   </form>
   <div class="table-wrap">
-    <table class="data">
+    <table class="data" id="table-siswa-list">
       <thead>
         <tr>
           <th class="num" style="width:52px">No</th>

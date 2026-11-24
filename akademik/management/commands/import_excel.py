@@ -171,7 +171,8 @@ class Command(BaseCommand):
             if not nama or nomor is None:
                 break
             subject, _ = Subject.objects.update_or_create(
-                nama=nama, defaults={'urutan': int(nomor)}
+                academic_year=academic_year, nama=nama,
+                defaults={'urutan': int(nomor)},
             )
             subjects[nama] = subject
         self.stdout.write(f'  Mata pelajaran: {len(subjects)}')
@@ -289,7 +290,7 @@ class Command(BaseCommand):
                     student=siswa, semester=semester, urutan=slot + 1,
                     defaults={
                         'nama': nama_eks, 'predikat': predikat, 'deskripsi': deskripsi,
-                        'guru': wali_guru,
+                        'guru': wali_guru, 'academic_year': academic_year,
                     },
                 )
                 jumlah_ekskul += 1

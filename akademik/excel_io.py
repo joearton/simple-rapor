@@ -391,8 +391,8 @@ def import_guru(file_obj, kelas=None, tahun=None):
 
 # ---------------- MAPEL ----------------
 
-MAPEL_HEADERS = ['Urutan', 'Nama Mata Pelajaran', 'Guru Pengampu', 'Jumlah TP']
-MAPEL_WIDTHS = [10, 34, 30, 12]
+MAPEL_HEADERS = ['Urutan', 'Kode', 'Nama Mata Pelajaran', 'Deskripsi', 'Guru Pengampu', 'Jumlah TP']
+MAPEL_WIDTHS = [10, 14, 34, 40, 30, 12]
 
 
 def export_mapel(kelas, tahun, template=False):
@@ -405,9 +405,10 @@ def export_mapel(kelas, tahun, template=False):
         ).select_related('teacher'):
             penugasan[p.subject_id] = p.teacher.nama
     if not template:
-        for subject in daftar_mapel():
+        for subject in daftar_mapel(tahun):
             ws.append([
-                subject.urutan, subject.nama, penugasan.get(subject.id, ''),
+                subject.urutan, subject.kode, subject.nama, subject.deskripsi,
+                penugasan.get(subject.id, ''),
                 subject.tujuan_list.filter(academic_year=tahun).count() if tahun else 0,
             ])
     return _response(wb, _nama_file('mata-pelajaran'))
@@ -420,18 +421,25 @@ def import_mapel(file_obj, kelas=None, tahun=None):
     ws = wb.active
     errors = []
     dibuat = diperbarui = 0
+    if tahun is None:
+        raise ExcelImportError(['Tahun pelajaran aktif belum ditetapkan.'])
     with transaction.atomic():
         for baris, row in _baris_data(ws):
-            values = list(row) + [''] * max(0, 4 - len(row))
-            nama = _teks(values[1])
+            values = list(row) + [''] * max(0, 6 - len(row))
+            nama = _teks(values[2])
             if not nama:
                 errors.append(f'Baris {baris}: nama mata pelajaran wajib diisi.')
                 continue
             urutan = _ke_int(values[0])
             subject, baru = Subject.objects.update_or_create(
-                nama=nama, defaults={'urutan': urutan or 0}
+                academic_year=tahun, nama=nama,
+                defaults={
+                    'urutan': urutan or 0,
+                    'kode': _teks(values[1]),
+                    'deskripsi': _teks(values[3]),
+                },
             )
-            guru_nama = _teks(values[2])
+            guru_nama = _teks(values[4])
             if guru_nama and kelas and tahun and guru_nama.lower() not in ('belum ditetapkan', '-'):
                 guru = Teacher.objects.filter(nama__iexact=guru_nama).first()
                 if guru is None:
@@ -718,6 +726,7 @@ def import_catatan(file_obj, kelas, semester, guru=None):
                     defaults={
                         'catatan': catatan, 'sakit': sakit, 'izin': izin,
                         'alpa': alpa, 'guru': guru,
+                        'academic_year': semester.academic_year,
                     },
                 )
             jumlah += 1
@@ -781,6 +790,7 @@ def import_ekskul(file_obj, kelas, semester, guru=None):
                         defaults={
                             'nama': nama_eks, 'predikat': predikat,
                             'deskripsi': deskripsi, 'guru': guru,
+                            'academic_year': semester.academic_year,
                         },
                     )
                     jumlah += 1

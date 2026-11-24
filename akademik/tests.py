@@ -7,6 +7,8 @@ from django.urls import reverse
 from .models import (
     AcademicYear,
     ClassGroup,
+    EvaluasiFormatif,
+    EvaluasiSumatif,
     Extracurricular,
     FormativeScore,
     HomeroomNote,
@@ -36,8 +38,12 @@ class RaporTestBase(TestCase):
             academic_year=self.tahun, tingkat='VII', nama='Uji', fase='D',
             wali_kelas='Wali Uji',
         )
-        self.mapel = Subject.objects.create(nama='Matematika', urutan=1)
-        self.mapel2 = Subject.objects.create(nama='Bahasa Indonesia', urutan=2)
+        self.mapel = Subject.objects.create(
+            academic_year=self.tahun, nama='Matematika', urutan=1
+        )
+        self.mapel2 = Subject.objects.create(
+            academic_year=self.tahun, nama='Bahasa Indonesia', urutan=2
+        )
         self.siswa = Student.objects.create(
             class_group=self.kelas, no_urut=1, nama='Siswa Uji', nis='1', nisn='2',
         )
@@ -169,9 +175,12 @@ class HalamanTest(RaporTestBase):
             reverse('akademik:impor', args=['siswa']),
             reverse('akademik:tp_menu'),
             reverse('akademik:tp_list', args=[self.mapel.id]),
+            reverse('akademik:tp_tambah'),
             reverse('akademik:formatif_menu'),
+            reverse('akademik:formatif_evaluasi_tambah'),
             reverse('akademik:formatif_entry', args=[self.mapel.id]),
             reverse('akademik:sumatif_menu'),
+            reverse('akademik:sumatif_evaluasi_tambah'),
             reverse('akademik:sumatif_entry', args=[self.mapel.id]),
             reverse('akademik:catatan_entry'),
             reverse('akademik:ekskul_entry'),
@@ -616,7 +625,7 @@ class ScopingSidebarTest(RaporTestBase):
         self.assertNotIn('Leger Nilai', html)
         self.assertNotIn('Cetak Rapor', html)
         self.assertNotIn('href="%s"' % reverse('akademik:siswa_list'), html)
-        self.assertIn('Asesmen Sumatif', html)
+        self.assertIn('Evaluasi Sumatif', html)
         self.assertEqual(self.client.get(reverse('akademik:leger')).status_code, 302)
         self.assertEqual(self.client.get(reverse('akademik:siswa_list')).status_code, 302)
 
@@ -762,18 +771,21 @@ class TahunPelajaranTPTest(RaporTestBase):
     def test_rapor_menggunakan_tp_tahun_semester(self):
         tahun_lama = AcademicYear.objects.create(tahun='2025/2026')
         semester_lama = Semester.objects.create(academic_year=tahun_lama, nama='I')
+        mapel_lama = Subject.objects.create(
+            academic_year=tahun_lama, nama='Sejarah', urutan=1
+        )
         tp_lama = LearningObjective.objects.create(
-            subject=self.mapel, academic_year=tahun_lama, nomor=1,
+            subject=mapel_lama, academic_year=tahun_lama, nomor=1,
             deskripsi='materi tahun lalu',
         )
         FormativeScore.objects.create(
             student=self.siswa, objective=tp_lama, semester=semester_lama, nilai=4
         )
         data_lama = data_rapor(self.siswa, semester_lama)
-        mapel_lama = next(
-            row for row in data_lama['mapel_rows'] if row['subject'] == self.mapel
+        baris_lama = next(
+            row for row in data_lama['mapel_rows'] if row['subject'] == mapel_lama
         )
-        self.assertIn('materi tahun lalu', mapel_lama['capaian'])
+        self.assertIn('materi tahun lalu', baris_lama['capaian'])
 
     def test_deskripsi_rapor_memakai_snapshot_tp(self):
         FormativeScore.objects.create(
@@ -822,3 +834,183 @@ class CaptchaLoginTest(RaporTestBase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertNotIn('_auth_user_id', self.client.session)
+
+
+class TugasEvaluasiCrudTest(RaporTestBase):
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('admin_crud', 'crud@uji.id', 'rahasia123')
+        self.client.force_login(self.admin)
+
+    def test_tambah_ubah_dan_arsip_tp(self):
+        response = self.client.post(reverse('akademik:tp_tambah'), {
+            'subject': self.mapel.id,
+            'deskripsi': 'menyelesaikan operasi pecahan campuran',
+            'aktif': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        tugas = LearningObjective.objects.get(deskripsi='menyelesaikan operasi pecahan campuran')
+        self.assertEqual(tugas.academic_year, self.tahun)
+        self.assertEqual(tugas.nomor, 4)
+
+        response = self.client.post(reverse('akademik:tp_ubah', args=[tugas.id]), {
+            'subject': self.mapel.id,
+            'nomor': tugas.nomor,
+            'deskripsi': 'menyelesaikan operasi pecahan campuran dan desimal',
+            'aktif': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        tugas.refresh_from_db()
+        self.assertEqual(tugas.deskripsi, 'menyelesaikan operasi pecahan campuran dan desimal')
+
+        response = self.client.post(
+            reverse('akademik:tp_list', args=[self.mapel.id]),
+            {'aksi': 'hapus', 'tp_id': tugas.id},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(
+            LearningObjective.objects.filter(deskripsi=tugas.deskripsi).exists()
+        )
+
+    def test_crud_evaluasi_formatif_dan_sumatif(self):
+        response = self.client.post(reverse('akademik:formatif_evaluasi_tambah'), {
+            'subject': self.mapel.id, 'nama': 'Kuis 1', 'jenis': 'kuis',
+            'bobot': 10, 'aktif': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        evaluasi = EvaluasiFormatif.objects.get(nama='Kuis 1')
+        self.assertEqual(evaluasi.subject, self.mapel)
+
+        response = self.client.post(
+            reverse('akademik:formatif_evaluasi_ubah', args=[evaluasi.id]),
+            {'subject': self.mapel.id, 'nama': 'Kuis Perbaikan', 'jenis': 'kuis',
+             'bobot': 10, 'aktif': 'on'},
+        )
+        self.assertEqual(response.status_code, 302)
+        evaluasi.refresh_from_db()
+        self.assertEqual(evaluasi.nama, 'Kuis Perbaikan')
+        self.client.post(reverse('akademik:formatif_evaluasi_hapus', args=[evaluasi.id]))
+        self.assertFalse(EvaluasiFormatif.objects.filter(nama='Kuis Perbaikan').exists())
+
+        response = self.client.post(reverse('akademik:sumatif_evaluasi_tambah'), {
+            'subject': self.mapel.id, 'nama': 'STS', 'jenis': 'sts',
+            'bobot': 40, 'aktif': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(EvaluasiSumatif.objects.filter(nama='STS', subject=self.mapel).exists())
+
+    def test_mapel_terikat_tahun_pelajaran(self):
+        response = self.client.post(reverse('akademik:mapel_tambah'), {
+            'academic_year': self.tahun.id, 'kode': 'MTK', 'nama': 'Matematika',
+            'deskripsi': 'Mapel hitung', 'urutan': 9,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Subject.objects.filter(nama='Matematika', kode='MTK').exists())
+
+        tahun_lain = AcademicYear.objects.create(tahun='2030/2031')
+        response = self.client.post(reverse('akademik:mapel_tambah'), {
+            'academic_year': tahun_lain.id, 'kode': 'SEJ', 'nama': 'Sejarah',
+            'deskripsi': 'Mapel sejarah', 'urutan': 1,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Subject.objects.filter(nama='Sejarah', academic_year=tahun_lain).exists())
+
+    def test_catatan_dan_ekskul_menyimpan_tahun(self):
+        self.kelas.wali_kelas_guru = Teacher.objects.create(nama='Wali CRUD')
+        self.kelas.save()
+        wali = self.kelas.wali_kelas_guru
+        user = User.objects.create_user('wali_crud', password='rahasia123')
+        wali.user = user
+        wali.save()
+        self.client.force_login(user)
+        self.client.post(reverse('akademik:catatan_entry'), {
+            f'catatan_{self.siswa.id}': 'Catatan', f'sakit_{self.siswa.id}': 1,
+            f'izin_{self.siswa.id}': 0, f'alpa_{self.siswa.id}': 0,
+        })
+        note = HomeroomNote.objects.get(student=self.siswa)
+        self.assertEqual(note.academic_year, self.tahun)
+
+        self.client.post(reverse('akademik:ekskul_entry'), {
+            f'eks_{self.siswa.id}_1': 'Basket', f'pred_{self.siswa.id}_1': 'A',
+            f'desk_{self.siswa.id}_1': 'Baik',
+        })
+        eks = Extracurricular.objects.get(student=self.siswa, urutan=1)
+        self.assertEqual(eks.academic_year, self.tahun)
+
+
+class RoleAuditTest(RaporTestBase):
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('admin_role', 'role@uji.id', 'rahasia123')
+        self.client.force_login(self.admin)
+
+    def test_role_operator_dan_kepala_sekolah(self):
+        response = self.client.post(reverse('akademik:pengguna_tambah'), {
+            'username': 'operator_role', 'first_name': 'Operator',
+            'email': 'operator@uji.id', 'is_active': 'on', 'role': 'operator',
+            'password': 'rahasia123',
+        })
+        self.assertEqual(response.status_code, 302)
+        operator = User.objects.get(username='operator_role')
+        self.assertTrue(operator.groups.filter(name='Operator/Tata Usaha').exists())
+
+        self.client.force_login(operator)
+        self.assertEqual(self.client.get(reverse('akademik:mapel_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('akademik:pengguna_list')).status_code, 302)
+        self.assertEqual(self.client.get(reverse('akademik:identitas')).status_code, 302)
+
+        kepala = User.objects.create_user('kepala_role', password='rahasia123')
+        from django.contrib.auth.models import Group
+        kepala.groups.add(Group.objects.get(name='Kepala Sekolah'))
+        self.client.force_login(kepala)
+        self.assertEqual(self.client.get(reverse('akademik:leger')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('akademik:rapor_index')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('akademik:mapel_list')).status_code, 302)
+
+    def test_admin_bisa_melihat_audit_log(self):
+        self.client.logout()
+        self.client.login(username='admin_role', password='rahasia123')
+        from akademik.models import AuditLog
+        self.assertTrue(AuditLog.objects.filter(aksi='LOGIN').exists())
+        response = self.client.get(reverse('akademik:audit_log'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_ganti_tahun_pelajaran_dari_topbar(self):
+        tahun_baru = AcademicYear.objects.create(tahun='2028/2029')
+        semester_baru = Semester.objects.create(academic_year=tahun_baru, nama='I')
+        kelas_baru = ClassGroup.objects.create(
+            academic_year=tahun_baru, tingkat='VIII', nama='Baru', fase='D'
+        )
+        response = self.client.post(reverse('akademik:pilih_tahun_pelajaran'), {
+            'tahun': tahun_baru.id, 'next': reverse('akademik:dashboard'),
+        })
+        self.assertEqual(response.status_code, 302)
+        tahun_baru.refresh_from_db()
+        semester_baru.refresh_from_db()
+        kelas_baru.refresh_from_db()
+        self.assertTrue(tahun_baru.aktif)
+        self.assertTrue(semester_baru.aktif)
+        self.assertTrue(kelas_baru.aktif)
+        self.assertFalse(AcademicYear.objects.get(pk=self.tahun.pk).aktif)
+
+
+class ElemenUiTest(RaporTestBase):
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('admin_ui', 'ui@uji.id', 'rahasia123')
+        self.client.force_login(self.admin)
+
+    def test_id_placeholder_dan_help_form(self):
+        html = self.client.get(reverse('akademik:siswa_tambah')).content.decode()
+        self.assertIn('id="form-siswa"', html)
+        self.assertIn('placeholder="Masukkan', html)
+        self.assertIn('data-help=', html)
+        self.assertIn('id="app-layout"', html)
+        self.assertIn('id="main-content"', html)
+
+    def test_topbar_memiliki_chooser_periode(self):
+        html = self.client.get(reverse('akademik:dashboard')).content.decode()
+        self.assertIn('id="period-form"', html)
+        self.assertIn('id="period-year-select"', html)
+        self.assertIn('id="user-menu"', html)
+        self.assertIn('id="dashboard-hero"', html)

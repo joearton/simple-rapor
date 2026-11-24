@@ -15,6 +15,8 @@ urlpatterns = [
     path('pengguna/<int:pk>/ubah/', views.pengguna_form, name='pengguna_ubah'),
     path('pengguna/<int:pk>/reset-password/', views.pengguna_reset_password, name='pengguna_reset_password'),
     path('pengguna/<int:pk>/hapus/', views.pengguna_hapus, name='pengguna_hapus'),
+    path('audit-log/', views.audit_log, name='audit_log'),
+    path('pilih-tahun-pelajaran/', views.pilih_tahun_pelajaran, name='pilih_tahun_pelajaran'),
 
     path('', views.dashboard, name='dashboard'),
     path('identitas/', views.identitas, name='identitas'),
@@ -53,14 +55,22 @@ urlpatterns = [
     path('ekspor/<str:kind>/', views.ekspor_data, name='ekspor'),
     path('impor/<str:kind>/', views.impor_data, name='impor'),
 
-    path('tp/', views.mapel_menu, {'mode': 'tp'}, name='tp_menu'),
-    path('tp/<int:subject_id>/', views.tp_list, name='tp_list'),
+    path('tp/', views.tugas_list, name='tp_menu'),
+    path('tp/tambah/', views.tugas_form, name='tp_tambah'),
+    path('tp/<int:pk>/ubah/', views.tugas_form, name='tp_ubah'),
+    path('tp/<int:subject_id>/', views.tugas_list, name='tp_list'),
 
-    path('formatif/', views.mapel_menu, {'mode': 'formatif'}, name='formatif_menu'),
-    path('formatif/<int:subject_id>/', views.formatif_entry, name='formatif_entry'),
+    path('formatif/', views.evaluasi_formatif_list, name='formatif_menu'),
+    path('formatif/tambah/', views.evaluasi_formatif_form, name='formatif_evaluasi_tambah'),
+    path('formatif/<int:pk>/ubah/', views.evaluasi_formatif_form, name='formatif_evaluasi_ubah'),
+    path('formatif/<int:pk>/hapus/', views.evaluasi_formatif_hapus, name='formatif_evaluasi_hapus'),
+    path('formatif/<int:subject_id>/nilai/', views.formatif_entry, name='formatif_entry'),
 
-    path('sumatif/', views.mapel_menu, {'mode': 'sumatif'}, name='sumatif_menu'),
-    path('sumatif/<int:subject_id>/', views.sumatif_entry, name='sumatif_entry'),
+    path('sumatif/', views.evaluasi_sumatif_list, name='sumatif_menu'),
+    path('sumatif/tambah/', views.evaluasi_sumatif_form, name='sumatif_evaluasi_tambah'),
+    path('sumatif/<int:pk>/ubah/', views.evaluasi_sumatif_form, name='sumatif_evaluasi_ubah'),
+    path('sumatif/<int:pk>/hapus/', views.evaluasi_sumatif_hapus, name='sumatif_evaluasi_hapus'),
+    path('sumatif/<int:subject_id>/nilai/', views.sumatif_entry, name='sumatif_entry'),
 
     path('catatan/', views.catatan_entry, name='catatan_entry'),
     path('ekskul/', views.ekskul_entry, name='ekskul_entry'),

@@ -1,18 +1,45 @@
 from captcha.fields import CaptchaField
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm, SetPasswordForm
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.db.models import Q
 
-from .models import AcademicYear, ClassGroup, School, Semester, Student, Subject, Teacher
+from .models import (
+    AcademicYear,
+    ClassGroup,
+    EvaluasiFormatif,
+    EvaluasiSumatif,
+    LearningObjective,
+    School,
+    Semester,
+    Student,
+    Subject,
+    Teacher,
+)
 
 
 def _pasang_class(form):
-    for field in form.fields.values():
+    for name, field in form.fields.items():
+        widget = field.widget
         css = 'form-input'
-        if isinstance(field.widget, forms.CheckboxInput):
+        if isinstance(widget, forms.CheckboxInput):
             css = 'form-check'
-        field.widget.attrs.setdefault('class', css)
+        widget.attrs.setdefault('class', css)
+
+        label = str(field.label or name.replace('_', ' ').title())
+        if not field.help_text:
+            if isinstance(widget, (forms.Select, forms.SelectMultiple)):
+                field.help_text = f'Pilih {label.lower()}.'
+            elif isinstance(widget, forms.CheckboxInput):
+                field.help_text = f'Centang jika {label.lower()}.'
+            else:
+                field.help_text = f'Isi {label.lower()}.'
+
+        if not isinstance(widget, (forms.CheckboxInput, forms.FileInput, forms.Select, forms.MultiWidget)):
+            if not widget.attrs.get('placeholder') and getattr(widget, 'input_type', 'text') not in ('date', 'datetime-local', 'time'):
+                widget.attrs['placeholder'] = f'Masukkan {label.lower()}'
+        if name != 'captcha' and field.help_text:
+            widget.attrs.setdefault('data-help', str(field.help_text))
     return form
 
 
@@ -68,6 +95,7 @@ class SchoolForm(forms.ModelForm):
         for field in self.fields.values():
             if 'class' not in field.widget.attrs:
                 field.widget.attrs['class'] = 'form-input'
+        _pasang_class(self)
 
     def clean_logo(self):
         logo = self.cleaned_data.get('logo')
@@ -90,6 +118,7 @@ class KelasForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['wali_kelas_guru'].queryset = Teacher.objects.filter(aktif=True)
+        _pasang_class(self)
 
     def save(self, commit=True):
         obj = super().save(commit=False)
@@ -106,7 +135,11 @@ class KelasForm(forms.ModelForm):
 class AcademicYearForm(forms.ModelForm):
     class Meta:
         model = AcademicYear
-        fields = ['tahun']
+        fields = ['tahun', 'tanggal_mulai', 'tanggal_berakhir']
+        widgets = {
+            'tanggal_mulai': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'tanggal_berakhir': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -252,13 +285,17 @@ class TeacherForm(forms.ModelForm):
             user.first_name = teacher.nama
             user.is_active = bool(akun_aktif)
             user.save(update_fields=['email', 'first_name', 'is_active'])
+        if teacher.user_id:
+            guru_group, _ = Group.objects.get_or_create(name='Guru Mata Pelajaran')
+            teacher.user.groups.add(guru_group)
         return teacher
 
 
 class SubjectForm(forms.ModelForm):
     class Meta:
         model = Subject
-        fields = ['nama', 'urutan']
+        fields = ['academic_year', 'kode', 'nama', 'deskripsi', 'urutan']
+        widgets = {'deskripsi': forms.Textarea(attrs={'rows': 3})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -289,10 +326,20 @@ class AdminResetPasswordForm(SetPasswordForm):
 
 class UserForm(forms.ModelForm):
     ROLE_CHOICES = [
-        ('admin', 'Administrator'),
-        ('guru', 'Guru'),
+        ('super_admin', 'Super Admin'),
+        ('kepala_sekolah', 'Kepala Sekolah'),
+        ('operator', 'Operator/Tata Usaha'),
+        ('guru', 'Guru Mata Pelajaran'),
         ('pengguna', 'Pengguna biasa'),
     ]
+
+    ROLE_GROUP = {
+        'super_admin': 'Super Admin',
+        'kepala_sekolah': 'Kepala Sekolah',
+        'operator': 'Operator/Tata Usaha',
+        'guru': 'Guru Mata Pelajaran',
+        'pengguna': None,
+    }
 
     password = forms.CharField(
         label='Password',
@@ -321,11 +368,16 @@ class UserForm(forms.ModelForm):
             guru_qs = Teacher.objects.filter(user__isnull=True)
         self.fields['guru'].queryset = guru_qs.select_related('user')
         if self.instance and self.instance.pk:
-            if self.instance.is_staff or self.instance.is_superuser:
-                self.fields['role'].initial = 'admin'
+            groups = set(self.instance.groups.values_list('name', flat=True))
+            if self.instance.is_superuser or 'Super Admin' in groups:
+                self.fields['role'].initial = 'super_admin'
+            elif 'Kepala Sekolah' in groups:
+                self.fields['role'].initial = 'kepala_sekolah'
+            elif 'Operator/Tata Usaha' in groups:
+                self.fields['role'].initial = 'operator'
             teacher = Teacher.objects.filter(user=self.instance).first()
             if teacher:
-                if not self.fields['role'].initial or self.fields['role'].initial != 'admin':
+                if self.fields['role'].initial == 'pengguna':
                     self.fields['role'].initial = 'guru'
                 self.fields['guru'].initial = teacher
 
@@ -338,19 +390,29 @@ class UserForm(forms.ModelForm):
             self.add_error('password', 'Password minimal 6 karakter.')
         if cleaned.get('role') == 'guru' and not cleaned.get('guru'):
             self.add_error('guru', 'Pilih data guru untuk peran guru.')
+        if cleaned.get('role') == 'super_admin' and password and len(password) < 8:
+            self.add_error('password', 'Password Super Admin minimal 8 karakter.')
         return cleaned
 
     def save(self, commit=True):
         user = super().save(commit=False)
         role = self.cleaned_data['role']
-        user.is_staff = role == 'admin'
-        user.is_superuser = role == 'admin'
+        user.is_staff = role == 'super_admin'
+        user.is_superuser = role == 'super_admin'
         user.is_active = self.cleaned_data.get('is_active', True)
         password = self.cleaned_data.get('password')
         if password:
             user.set_password(password)
         if commit:
             user.save()
+            target_group = self.ROLE_GROUP.get(role)
+            role_groups = Group.objects.filter(name__in=[
+                name for name in self.ROLE_GROUP.values() if name
+            ])
+            user.groups.remove(*role_groups)
+            if target_group:
+                group, _ = Group.objects.get_or_create(name=target_group)
+                user.groups.add(group)
             guru = self.cleaned_data.get('guru')
             if guru:
                 Teacher.objects.filter(user=user).exclude(pk=guru.pk).update(user=None)
@@ -359,3 +421,61 @@ class UserForm(forms.ModelForm):
             elif role == 'pengguna':
                 Teacher.objects.filter(user=user).update(user=None)
         return user
+
+
+class TujuanPembelajaranForm(forms.ModelForm):
+    class Meta:
+        model = LearningObjective
+        fields = ['subject', 'nomor', 'deskripsi', 'guru', 'aktif']
+        widgets = {
+            'deskripsi': forms.Textarea(attrs={'rows': 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+        self.fields['nomor'].required = False
+        self.fields['nomor'].help_text = 'Kosongkan untuk melanjutkan nomor otomatis.'
+        self.fields['guru'].queryset = Teacher.objects.filter(aktif=True)
+
+
+
+
+class EvaluasiFormatifForm(forms.ModelForm):
+    class Meta:
+        model = EvaluasiFormatif
+        fields = ['subject', 'nama', 'jenis', 'tanggal', 'bobot', 'deskripsi', 'aktif']
+        widgets = {
+            'tanggal': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'deskripsi': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+
+    def clean_bobot(self):
+        bobot = self.cleaned_data.get('bobot')
+        if bobot is not None and (bobot < 0 or bobot > 100):
+            raise forms.ValidationError('Bobot harus antara 0 dan 100.')
+        return bobot
+
+
+class EvaluasiSumatifForm(forms.ModelForm):
+    class Meta:
+        model = EvaluasiSumatif
+        fields = ['subject', 'nama', 'jenis', 'tanggal', 'bobot', 'deskripsi', 'aktif']
+        widgets = {
+            'tanggal': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'deskripsi': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+
+    def clean_bobot(self):
+        bobot = self.cleaned_data.get('bobot')
+        if bobot is not None and (bobot < 0 or bobot > 100):
+            raise forms.ValidationError('Bobot harus antara 0 dan 100.')
+        return bobot
