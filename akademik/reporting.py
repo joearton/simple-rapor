@@ -143,21 +143,25 @@ def susun_report_card(student, semester, user=None):
         student=student, semester=semester
     ).select_related('activity')
     if enrollments.exists():
-        for eks in enrollments.order_by('activity__urutan', 'activity__nama'):
+        for index, eks in enumerate(
+            enrollments.order_by('activity__urutan', 'activity__nama'), start=1
+        ):
             ReportExtracurricular.objects.create(
                 report_card=card,
-                urutan=eks.activity.urutan,
+                urutan=index,
                 nama=eks.activity.nama,
                 predikat=eks.predikat_efektif,
                 deskripsi=eks.deskripsi or eks.activity.deskripsi,
             )
     else:
-        for eks in Extracurricular.objects.filter(
-            student=student, semester=semester
-        ).order_by('urutan'):
+        for index, eks in enumerate(
+            Extracurricular.objects.filter(
+                student=student, semester=semester
+            ).order_by('urutan'), start=1
+        ):
             ReportExtracurricular.objects.create(
                 report_card=card,
-                urutan=eks.urutan,
+                urutan=index,
                 nama=eks.nama,
                 predikat=eks.predikat,
                 deskripsi=eks.deskripsi,

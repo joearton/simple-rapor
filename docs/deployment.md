@@ -30,6 +30,7 @@ Data demo untuk pengecekan:
 ```bash
 python manage.py seed_demo
 python manage.py seed_demo --force   # ganti data demo yang sudah ada
+python manage.py seed_demo_lintas_tahun  # tambah angkatan VII→VIII→IX
 ```
 
 Akun demo memakai password `demo12345`:
