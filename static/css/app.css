@@ -729,3 +729,35 @@ table.data .sub { display: block; font-weight: 400; color: var(--muted); font-si
   .sidebar .brand-text span { display: none; }
 }
 
+/* Login juga harus satu kolom pada ponsel lebar/tablet kecil. */
+@media screen and (max-width: 1024px) {
+  .login-wrap {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .login-art { display: none; }
+  .login-panel {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 28px 16px 36px;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: max(6vh, 30px);
+  }
+  .login-card {
+    width: 100%;
+    max-width: 560px;
+    min-width: 0;
+  }
+  .login-card .field input,
+  .login-card .field select {
+    width: 100%;
+  }
+  .captcha-field img.captcha {
+    width: 190px;
+    height: 58px;
+    object-fit: contain;
+  }
+}
+
