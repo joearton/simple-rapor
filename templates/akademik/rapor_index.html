@@ -5,11 +5,16 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <h2>Cetak Rapor</h2>
-    <p>Pilih siswa untuk membuka rapor siap cetak. Gunakan ukuran kertas A4.</p>
+    <h2>Rapor &amp; Publikasi</h2>
+    <p>Susun snapshot nilai, ajukan review, setujui, lalu terbitkan. Rapor terbit terkunci.</p>
   </div>
   <div class="actions">
-    <a class="btn btn-gold" href="{% url 'akademik:cetak_semua' %}" target="_blank"><svg class="icon"><use href="#i-printer"/></svg> Cetak Semua Rapor</a>
+    <form method="post" action="{% url 'akademik:rapor_susun_semua' %}" class="inline-form">
+      {% csrf_token %}
+      <button class="btn" type="submit"><svg class="icon"><use href="#i-save"/></svg> Susun Semua</button>
+    </form>
+    <a class="btn" href="{% url 'akademik:rapor_pdf_semua' %}"><svg class="icon"><use href="#i-file"/></svg> PDF Semua</a>
+    <a class="btn btn-gold" href="{% url 'akademik:cetak_semua' %}" target="_blank"><svg class="icon"><use href="#i-printer"/></svg> Cetak Semua</a>
   </div>
 </div>
 
@@ -31,25 +36,83 @@
           <th>Nama Siswa</th>
           <th>NIS / NISN</th>
           <th class="num">L/P</th>
-          <th style="width:260px">Aksi</th>
+          <th class="num" style="width:120px">Status</th>
+          <th style="width:420px">Aksi</th>
         </tr>
       </thead>
       <tbody>
-        {% for siswa in siswa_list %}
+        {% for row in rows %}
+        {% with siswa=row.siswa card=row.card %}
         <tr>
           <td class="num">{{ siswa.no_urut }}</td>
           <td><span class="nama">{{ siswa.nama }}</span></td>
           <td>{{ siswa.nis|default:"-" }} / {{ siswa.nisn|default:"-" }}</td>
           <td class="num">{{ siswa.jenis_kelamin }}</td>
+          <td class="num">
+            {% if not card %}<span class="badge badge-gray">Belum disusun</span>
+            {% elif card.status == 'PUBLISHED' %}<span class="badge badge-green">Terbit</span>
+            {% elif card.status == 'APPROVED' %}<span class="badge" style="background:#e7f1ff;color:#1d4f91">Disetujui</span>
+            {% elif card.status == 'REVIEW' %}<span class="badge" style="background:#fdf3dd;color:#8a6410">Diajukan</span>
+            {% elif card.status == 'REVISI' %}<span class="badge" style="background:#fde8e6;color:#9b2c22">Perlu Revisi</span>
+            {% else %}<span class="badge badge-gray">Draf</span>{% endif %}
+          </td>
           <td>
-            <div style="display:flex;gap:6px">
-              <a class="btn btn-sm btn-primary" href="{% url 'akademik:rapor_detail' siswa.id %}" target="_blank"><svg class="icon"><use href="#i-printer"/></svg> Rapor</a>
-              <a class="btn btn-sm" href="{% url 'akademik:rapor_sampul' siswa.id %}" target="_blank"><svg class="icon"><use href="#i-file"/></svg> Sampul</a>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <a class="btn btn-sm" href="{% url 'akademik:rapor_detail' siswa.id %}" target="_blank"><svg class="icon"><use href="#i-printer"/></svg> Lihat</a>
+              <a class="btn btn-sm" href="{% url 'akademik:rapor_pdf' siswa.id %}"><svg class="icon"><use href="#i-file"/></svg> PDF</a>
+              <a class="btn btn-sm" href="{% url 'akademik:rapor_sampul' siswa.id %}" target="_blank">Sampul</a>
+
+              {% if not card or card.status == 'DRAF' or card.status == 'REVISI' %}
+              <form method="post" action="{% url 'akademik:rapor_susun' siswa.id %}" class="inline-form">
+                {% csrf_token %}
+                <button class="btn btn-sm" type="submit">{% if card %}Perbarui{% else %}Susun{% endif %}</button>
+              </form>
+              {% endif %}
+
+              {% if card and card.status == 'DRAF' or card and card.status == 'REVISI' %}
+              <form method="post" action="{% url 'akademik:rapor_ajukan' card.id %}" class="inline-form">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-primary" type="submit">Ajukan</button>
+              </form>
+              {% endif %}
+
+              {% if card and card.status == 'REVIEW' and bisa_setujui %}
+              <form method="post" action="{% url 'akademik:rapor_setujui' card.id %}" class="inline-form">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-primary" type="submit">Setujui</button>
+              </form>
+              {% endif %}
+
+              {% if card and card.status == 'REVIEW' or card and card.status == 'APPROVED' %}
+                {% if bisa_setujui %}
+                <form method="post" action="{% url 'akademik:rapor_kembalikan' card.id %}" class="inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="alasan" value="Perlu revisi">
+                  <button class="btn btn-sm" type="submit">Kembalikan</button>
+                </form>
+                {% endif %}
+              {% endif %}
+
+              {% if card and card.status == 'APPROVED' and bisa_setujui %}
+              <form method="post" action="{% url 'akademik:rapor_terbitkan' card.id %}" class="inline-form" onsubmit="return confirm('Terbitkan dan kunci rapor {{ siswa.nama|escapejs }}?');">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-gold" type="submit">Terbitkan</button>
+              </form>
+              {% endif %}
+
+              {% if card and card.status == 'PUBLISHED' and bisa_buka %}
+              <form method="post" action="{% url 'akademik:rapor_buka_kunci' card.id %}" class="inline-form" onsubmit="return confirm('Buka kunci rapor {{ siswa.nama|escapejs }}? Tindakan ini dicatat di audit log.');">
+                {% csrf_token %}
+                <input type="hidden" name="alasan" value="Revisi dari halaman rapor">
+                <button class="btn btn-sm btn-danger" type="submit">Buka Kunci</button>
+              </form>
+              {% endif %}
             </div>
           </td>
         </tr>
+        {% endwith %}
         {% empty %}
-        <tr><td colspan="5" class="empty"><strong>Belum ada siswa</strong>Tambahkan data siswa terlebih dahulu.</td></tr>
+        <tr><td colspan="6" class="empty"><strong>Belum ada siswa</strong>Tambahkan data siswa terlebih dahulu.</td></tr>
         {% endfor %}
       </tbody>
     </table>

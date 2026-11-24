@@ -75,21 +75,22 @@ Sudah tersedia:
 - Tahun pelajaran/semester/kelas, mapel per tahun, guru, siswa, penugasan.
 - Tugas pembelajaran (model `LearningObjective` diperluas), evaluasi formatif/sumatif (rencana), grid nilai formatif/sumatif, leger, rapor dan sampul, catatan/ekskul terikat tahun.
 - Import/export Excel, pengaturan identitas/logo/tata letak rapor, filter/paginasi.
-- 90 test lulus.
+- 97 test lulus.
 
-Pembaruan Tahap 1–4 (24 Nov 2026):
+Pembaruan Tahap 1–5 (24 Nov 2026):
 - Peran Super Admin/Kepala Sekolah/Operator/Guru/Wali + audit log + dashboard per peran.
 - Master `Grade`, `SchoolProfile`, riwayat `StudentEnrollment`, dan penugasan mengajar per semester.
 - Roster kelas membaca riwayat enrollment; import/export data kelas tersedia.
 - CP, materi, tugas pembelajaran, dan pengumpulan tugas tersedia beserta tab, filter, pagination, dan import/export.
 - Asesmen generik (`Assessment`/`Component`/`Result`), konfigurasi bobot & pembulatan, grid autosave, serta deskripsi TP dengan ambang konfigurabel.
+- Snapshot rapor, alur review/approval/publikasi dengan penguncian, PDF WeasyPrint, dan cetak massal per kelas.
 
 Kesenjangan utama terhadap target:
-1. Model asesmen masih spesifik (`FormativeScore`, `SummativeLM/Score`), belum generik (`Assessment/Component/Result`) dan belum punya konfigurasi bobot formal.
-2. TP dan tugas masih dalam satu model; CP, lingkup materi, submission, rubrik belum ada.
-3. Raport belum dimodelkan sebagai entitas (`ReportCard`, status, publikasi, locking).
+1. Tabel nilai lama (`FormativeScore`, `SummativeLM/Score`) masih dipertahankan sebagai layar input dan disinkronkan ke model generik; target akhir menghapusnya.
+2. Modul CP/materi/tugas/pengumpulan sudah tersedia; rubrik baru tersedia lewat admin, belum ada UI khusus.
+3. Rapor sudah dimodelkan dengan snapshot, status, publikasi, dan locking.
 4. Peran Kepala Sekolah/Operator/Guru/Wali sudah dipisah dan audit log tersedia; peran Siswa/Orang Tua belum.
-5. PDF masih berbasis print browser, belum WeasyPrint; belum ada backup/dokumentasi lengkap.
+5. PDF WeasyPrint sudah tersedia; backup/restore, deployment, dan dokumentasi pengguna lengkap belum.
 6. Struktur masih satu app `akademik`; target modular apps.
 
 ## 6. Prioritas (MoSCoW)

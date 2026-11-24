@@ -154,10 +154,10 @@ Nilai kosong tidak dihitung nol. Bulatkan hanya pada tahap akhir.
 | LearningObjective (TP+tugas) | LearningObjective + LearningTask | selesai; kolom tugas lama sudah dihapus di 0012 sehingga tidak ada backfill |
 | FormativeScore | Assessment(FORMATIF) + Component/Result | selesai; disinkronkan via signal + backfill 0018 |
 | SummativeLM / SummativeScore | Assessment(LM/STS/SAS) + Component/Result | selesai; komponen LM-1..n, STS, SAS tes/non-tes |
-| HomeroomNote | StudentTeacherNote + StudentAttendance | pecah field |
-| Extracurricular | Extracurricular + StudentExtracurricular | master + penilaian siswa |
-| Perhitungan rapor di service | ReportCard + ReportSubjectGrade | snapshot hasil final |
-| Print HTML | ReportCard + PDF + ReportPublication | status/lock |
+| HomeroomNote | StudentTeacherNote + StudentAttendance | snapshot pada ReportCard |
+| Extracurricular | Extracurricular + StudentExtracurricular | snapshot pada ReportExtracurricular |
+| Perhitungan rapor di service | ReportCard + ReportSubjectGrade | selesai; snapshot final + status |
+| Print HTML | ReportCard + PDF + ReportPublication | selesai; PDF WeasyPrint + lock + audit |
 
 ## 7. Constraint dan integritas
 - `StudentEnrollment`: satu aktif per siswa/tahun.

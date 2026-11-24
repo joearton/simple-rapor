@@ -11,11 +11,26 @@ from django.db import transaction
 from django.db.models import Count, ProtectedError, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .audit import catat_audit
+from .reporting import (
+    ReportError,
+    ReportIncomplete,
+    ajukan,
+    buka_kunci,
+    konteks_rapor,
+    konteks_rapor_siswa,
+    kembalikan,
+    periksa_kelengkapan,
+    rapor_terkunci,
+    setujui,
+    susun_report_card,
+    terbitkan,
+)
 from .forms import (
     AcademicYearForm,
     AdminResetPasswordForm,
@@ -59,6 +74,8 @@ from .models import (
     LearningOutcome,
     LearningTask,
     LearningTaskSubmission,
+    ReportCard,
+    ReportSubjectGrade,
     School,
     Semester,
     Student,
@@ -169,6 +186,14 @@ def _filter_siswa_text(qs, q):
 def _tolak_mapel(request):
     messages.error(request, 'Anda tidak mengampu mata pelajaran ini.')
     return redirect('akademik:dashboard')
+
+
+def _kelas_terkunci(kelas, semester):
+    if kelas is None or semester is None:
+        return False
+    return ReportCard.objects.filter(
+        semester=semester, class_group=kelas, status='PUBLISHED'
+    ).exists()
 
 
 def _tolak_halaman(request):
@@ -486,6 +511,9 @@ def formatif_entry(request, subject_id):
     students = list(page_obj)
 
     if request.method == 'POST':
+        if _kelas_terkunci(kelas, semester):
+            messages.error(request, 'Rapor kelas ini sudah terbit dan terkunci.')
+            return redirect(request.get_full_path())
         jumlah = 0
         with transaction.atomic():
             for siswa in students:
@@ -569,6 +597,9 @@ def sumatif_entry(request, subject_id):
     students = list(page_obj)
 
     if request.method == 'POST':
+        if _kelas_terkunci(kelas, semester):
+            messages.error(request, 'Rapor kelas ini sudah terbit dan terkunci.')
+            return redirect(request.get_full_path())
         with transaction.atomic():
             for siswa in students:
                 for nomor in range(1, MAX_LM + 1):
@@ -637,6 +668,9 @@ def catatan_entry(request):
     students = list(page_obj)
 
     if request.method == 'POST':
+        if _kelas_terkunci(kelas, semester):
+            messages.error(request, 'Rapor kelas ini sudah terbit dan terkunci.')
+            return redirect(request.get_full_path())
         with transaction.atomic():
             for siswa in students:
                 catatan = request.POST.get(f'catatan_{siswa.id}', '').strip()
@@ -696,6 +730,9 @@ def ekskul_entry(request):
     students = list(page_obj)
 
     if request.method == 'POST':
+        if _kelas_terkunci(kelas, semester):
+            messages.error(request, 'Rapor kelas ini sudah terbit dan terkunci.')
+            return redirect(request.get_full_path())
         with transaction.atomic():
             for siswa in students:
                 for urutan in slots:
@@ -762,6 +799,7 @@ def rapor_index(request):
     if not can_view_reports(request.user):
         return _tolak_halaman(request)
     kelas = _kelas()
+    semester = _semester()
     q = _q(request)
     base = (
         Student.objects.in_class(kelas).filter(aktif=True) if kelas
@@ -769,11 +807,27 @@ def rapor_index(request):
     )
     base = _filter_siswa_text(base, q)
     page_obj = _paginate(request, base.order_by('no_urut'))
+    cards = {}
+    if semester:
+        cards = {
+            card.student_id: card
+            for card in ReportCard.objects.filter(
+                semester=semester, student__in=page_obj.object_list
+            ).select_related('approved_by')
+        }
+    rows = [
+        {'siswa': siswa, 'card': cards.get(siswa.id)}
+        for siswa in page_obj.object_list
+    ]
     return render(request, 'akademik/rapor_index.html', {
         'siswa_list': page_obj,
-        'semester': _semester(),
+        'rows': rows,
+        'semester': semester,
         'page_obj': page_obj,
         'q': q,
+        'bisa_kelola': can_view_reports(request.user),
+        'bisa_setujui': is_admin(request.user) or is_kepala_sekolah(request.user),
+        'bisa_buka': is_admin(request.user),
     })
 
 
@@ -782,7 +836,7 @@ def rapor_detail(request, student_id):
     if not can_view_reports(request.user):
         return _tolak_halaman(request)
     student = get_object_or_404(Student, pk=student_id)
-    data = data_rapor(student, _semester())
+    data = konteks_rapor_siswa(student, _semester())
     return render(request, 'akademik/rapor_print.html', data)
 
 
@@ -791,9 +845,12 @@ def rapor_sampul(request, student_id):
     if not can_view_reports(request.user):
         return _tolak_halaman(request)
     student = get_object_or_404(Student, pk=student_id)
+    semester = _semester()
+    card = ReportCard.objects.filter(student=student, semester=semester).first()
     return render(request, 'akademik/rapor_sampul.html', {
         'student': student,
-        'semester': _semester(),
+        'semester': semester,
+        'class_group': card.class_group if card else None,
         'school': School.get_solo(),
     })
 
@@ -804,12 +861,170 @@ def cetak_semua(request):
         return _tolak_halaman(request)
     semester = _semester()
     students = daftar_siswa(_kelas())
-    data = [data_rapor(siswa, semester) for siswa in students]
+    data = [konteks_rapor_siswa(siswa, semester) for siswa in students]
     return render(request, 'akademik/rapor_semua.html', {
         'data': data,
         'semester': semester,
         'school': School.get_solo(),
     })
+
+
+@login_required
+def rapor_susun(request, student_id):
+    if not can_view_reports(request.user):
+        return _tolak_halaman(request)
+    student = get_object_or_404(Student, pk=student_id)
+    try:
+        susun_report_card(student, _semester(), request.user)
+    except ReportError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f'Rapor {student.nama} disusun.')
+    return redirect('akademik:rapor_index')
+
+
+@login_required
+def rapor_susun_semua(request):
+    if not can_view_reports(request.user):
+        return _tolak_halaman(request)
+    semester = _semester()
+    siswa_qs = daftar_siswa(_kelas())
+    berhasil = 0
+    gagal = 0
+    for siswa in siswa_qs:
+        try:
+            susun_report_card(siswa, semester, request.user)
+        except ReportError:
+            gagal += 1
+        else:
+            berhasil += 1
+    messages.success(
+        request,
+        f'Rapor disusun: {berhasil} siswa' + (f', {gagal} dilewati.' if gagal else '.'),
+    )
+    return redirect('akademik:rapor_index')
+
+
+@login_required
+def rapor_ajukan(request, pk):
+    if not can_view_reports(request.user):
+        return _tolak_halaman(request)
+    card = get_object_or_404(ReportCard, pk=pk)
+    try:
+        ajukan(card, request.user)
+    except ReportIncomplete as exc:
+        for issue in exc.issues[:8]:
+            messages.error(request, issue)
+    except ReportError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f'Rapor {card.student.nama} diajukan untuk review.')
+    return redirect('akademik:rapor_index')
+
+
+@login_required
+def rapor_setujui(request, pk):
+    if not (is_admin(request.user) or is_kepala_sekolah(request.user)):
+        return _tolak_halaman(request)
+    card = get_object_or_404(ReportCard, pk=pk)
+    try:
+        setujui(card, request.user)
+    except ReportError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f'Rapor {card.student.nama} disetujui.')
+    return redirect('akademik:rapor_index')
+
+
+@login_required
+def rapor_terbitkan(request, pk):
+    if not (is_admin(request.user) or is_kepala_sekolah(request.user)):
+        return _tolak_halaman(request)
+    card = get_object_or_404(ReportCard, pk=pk)
+    try:
+        terbitkan(card, request.user)
+    except ReportIncomplete as exc:
+        for issue in exc.issues[:8]:
+            messages.error(request, issue)
+    except ReportError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f'Rapor {card.student.nama} diterbitkan dan dikunci.')
+    return redirect('akademik:rapor_index')
+
+
+@login_required
+def rapor_buka_kunci(request, pk):
+    if not is_admin(request.user):
+        return _tolak_halaman(request)
+    card = get_object_or_404(ReportCard, pk=pk)
+    try:
+        buka_kunci(card, request.user, request.POST.get('alasan', ''))
+    except ReportError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f'Kunci rapor {card.student.nama} dibuka untuk revisi.')
+    return redirect('akademik:rapor_index')
+
+
+@login_required
+def rapor_kembalikan(request, pk):
+    if not (is_admin(request.user) or is_kepala_sekolah(request.user)):
+        return _tolak_halaman(request)
+    card = get_object_or_404(ReportCard, pk=pk)
+    try:
+        kembalikan(card, request.user, request.POST.get('alasan', ''))
+    except ReportError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f'Rapor {card.student.nama} dikembalikan ke revisi.')
+    return redirect('akademik:rapor_index')
+
+
+def _pdf_response(request, html, filename):
+    from django.conf import settings
+    from weasyprint import CSS, HTML
+
+    stylesheets = []
+    for nama in ('app.css', 'rapor.css'):
+        path = settings.BASE_DIR / 'static' / 'css' / nama
+        if path.exists():
+            stylesheets.append(CSS(filename=str(path)))
+    pdf = HTML(
+        string=html, base_url=request.build_absolute_uri('/')
+    ).write_pdf(stylesheets=stylesheets)
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}.pdf"'
+    return response
+
+
+@login_required
+def rapor_pdf(request, student_id):
+    if not can_view_reports(request.user):
+        return _tolak_halaman(request)
+    student = get_object_or_404(Student, pk=student_id)
+    semester = _semester()
+    data = konteks_rapor_siswa(student, semester)
+    html = render_to_string('akademik/rapor_print.html', data, request=request)
+    nama = f'rapor-{student.nis or student.id}-{semester.nama}'
+    return _pdf_response(request, html, nama)
+
+
+@login_required
+def rapor_pdf_semua(request):
+    if not can_view_reports(request.user):
+        return _tolak_halaman(request)
+    semester = _semester()
+    data = [konteks_rapor_siswa(siswa, semester) for siswa in daftar_siswa(_kelas())]
+    html = render_to_string(
+        'akademik/rapor_semua.html',
+        {'data': data, 'semester': semester, 'school': School.get_solo()},
+        request=request,
+    )
+    return _pdf_response(
+        request, html,
+        f'rapor-kelas-{(data[0]["class_group"].nama_lengkap if data and data[0].get("class_group") else "semua")}',
+    )
 
 
 @login_required
@@ -963,8 +1178,15 @@ def mapel_hapus(request, pk):
     subject = get_object_or_404(Subject, pk=pk)
     if request.method == 'POST':
         nama = subject.nama
-        subject.delete()
-        messages.success(request, f'Mata pelajaran {nama} beserta data nilainya dihapus.')
+        try:
+            subject.delete()
+        except ProtectedError:
+            messages.error(
+                request,
+                f'Mata pelajaran {nama} sudah dipakai snapshot rapor sehingga tidak dapat dihapus.',
+            )
+        else:
+            messages.success(request, f'Mata pelajaran {nama} beserta data nilainya dihapus.')
     return redirect('akademik:mapel_list')
 
 
@@ -1576,6 +1798,9 @@ def impor_data(request, kind):
     }
 
     if request.method == 'POST':
+        if kind in ('formatif', 'sumatif', 'catatan', 'ekskul') and _kelas_terkunci(kelas, semester):
+            messages.error(request, 'Rapor kelas ini sudah terbit dan terkunci.')
+            return redirect(back)
         file_obj = request.FILES.get('file')
         if not file_obj:
             messages.error(request, 'Pilih file Excel yang akan diimpor.')
@@ -2363,6 +2588,9 @@ def asesmen_grid(request, pk):
         hasil[(result.student_id, result.component_id)] = result
 
     if request.method == 'POST':
+        if _kelas_terkunci(kelas, asesmen.semester):
+            messages.error(request, 'Rapor kelas ini sudah terbit dan terkunci.')
+            return redirect(request.get_full_path())
         jumlah = 0
         with transaction.atomic():
             for siswa in students:
@@ -2427,6 +2655,12 @@ def asesmen_simpan(request, pk):
         return JsonResponse(
             {'ok': False, 'error': 'Siswa tidak terdaftar pada tahun asesmen.'}, status=400
         )
+    if ReportCard.objects.filter(
+        student=student, semester=asesmen.semester, status='PUBLISHED'
+    ).exists():
+        return JsonResponse(
+            {'ok': False, 'error': 'Rapor siswa sudah terbit dan terkunci.'}, status=403
+        )
     raw = data.get('nilai')
     if raw in (None, ''):
         AssessmentResult.objects.filter(component=component, student=student).delete()
@@ -2469,6 +2703,9 @@ def asesmen_impor(request, pk):
     asesmen = get_object_or_404(Assessment, pk=pk, subject__in=allowed)
     kelas = _kelas_asesmen(asesmen, request)
     if request.method == 'POST':
+        if _kelas_terkunci(kelas, asesmen.semester):
+            messages.error(request, 'Rapor kelas ini sudah terbit dan terkunci.')
+            return redirect(f"{reverse('akademik:asesmen_grid', args=[asesmen.id])}?kelas={kelas.id if kelas else ''}")
         file_obj = request.FILES.get('file')
         if not file_obj:
             messages.error(request, 'Pilih file Excel.')

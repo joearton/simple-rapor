@@ -27,6 +27,9 @@ from .models import (
     LearningOutcome,
     LearningTask,
     LearningTaskSubmission,
+    ReportCard,
+    ReportExtracurricular,
+    ReportSubjectGrade,
     School,
     Semester,
     Student,
@@ -44,6 +47,16 @@ from .services import (
     deskripsi_capaian,
     hitung_nilai,
     ringkasan_sumatif,
+)
+from .reporting import (
+    ReportIncomplete,
+    ReportLocked,
+    ajukan,
+    buka_kunci,
+    periksa_kelengkapan,
+    setujui,
+    susun_report_card,
+    terbitkan,
 )
 
 
@@ -1744,3 +1757,175 @@ class Tahap4AsesmenTest(RaporTestBase):
         )
         self.mapel.delete()
         self.assertFalse(Assessment.objects.filter(nama__contains='TP 1').exists())
+
+
+class Tahap5RaporTest(RaporTestBase):
+    """Tahap 5: snapshot rapor, alur status, penguncian, dan PDF."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('admin_tahap5', 't5@uji.id', 'rahasia123')
+        self.client.force_login(self.admin)
+
+    def _lengkapi_nilai(self):
+        for subject in (self.mapel, self.mapel2):
+            SummativeLM.objects.create(
+                student=self.siswa, subject=subject, semester=self.semester,
+                nomor=1, nilai=Decimal('85'),
+            )
+            SummativeScore.objects.create(
+                student=self.siswa, subject=subject, semester=self.semester,
+                sts=Decimal('80'), sas_non_tes=Decimal('90'), sas_tes=Decimal('100'),
+            )
+        HomeroomNote.objects.create(
+            student=self.siswa, semester=self.semester,
+            academic_year=self.tahun, catatan='Tingkatkan literasi.',
+            sakit=1, izin=2, alpa=0,
+        )
+        Extracurricular.objects.create(
+            student=self.siswa, semester=self.semester, academic_year=self.tahun,
+            urutan=1, nama='Pramuka', predikat='A', deskripsi='Aktif',
+        )
+
+    def test_susun_report_card_membuat_snapshot_lengkap(self):
+        self._lengkapi_nilai()
+        card = susun_report_card(self.siswa, self.semester, self.admin)
+
+        self.assertEqual(card.status, 'DRAF')
+        self.assertEqual(card.class_group, self.kelas)
+        self.assertEqual(card.nilai_mapel.count(), 2)
+        self.assertEqual(card.ekskul.count(), 1)
+        self.assertEqual(card.catatan_wali, 'Tingkatkan literasi.')
+        self.assertEqual(card.sakit, 1)
+        grade = card.nilai_mapel.get(subject=self.mapel)
+        self.assertIsNotNone(grade.nilai_akhir)
+        self.assertEqual(periksa_kelengkapan(card), [])
+
+    def test_snapshot_tidak_berubah_saat_nilai_sumber_diubah(self):
+        self._lengkapi_nilai()
+        card = susun_report_card(self.siswa, self.semester, self.admin)
+        grade = card.nilai_mapel.get(subject=self.mapel)
+        nilai_awal = grade.nilai_akhir
+
+        SummativeLM.objects.filter(
+            student=self.siswa, subject=self.mapel, semester=self.semester, nomor=1
+        ).update(nilai=Decimal('99'))
+        grade.refresh_from_db()
+        self.assertEqual(grade.nilai_akhir, nilai_awal)
+
+    def test_alur_status_dan_penguncian(self):
+        self._lengkapi_nilai()
+        card = susun_report_card(self.siswa, self.semester, self.admin)
+
+        ajukan(card, self.admin)
+        card.refresh_from_db()
+        self.assertEqual(card.status, 'REVIEW')
+
+        setujui(card, self.admin)
+        card.refresh_from_db()
+        self.assertEqual(card.status, 'APPROVED')
+        self.assertIsNotNone(card.approved_at)
+
+        terbitkan(card, self.admin)
+        card.refresh_from_db()
+        self.assertEqual(card.status, 'PUBLISHED')
+        self.assertIsNotNone(card.locked_at)
+
+        with self.assertRaises(ReportLocked):
+            susun_report_card(self.siswa, self.semester, self.admin)
+
+        buka_kunci(card, self.admin, 'Revisi nilai')
+        card.refresh_from_db()
+        self.assertEqual(card.status, 'REVISI')
+        self.assertIsNone(card.locked_at)
+
+    def test_ajukan_menolak_rapor_tidak_lengkap(self):
+        FormativeScore.objects.create(
+            student=self.siswa, objective=self.tp1, semester=self.semester, nilai=3,
+        )
+        message = HomeroomNote.objects.create(
+            student=self.siswa, semester=self.semester, academic_year=self.tahun,
+            catatan='Catatan',
+        )
+        self.assertIsNotNone(message)
+        card = susun_report_card(self.siswa, self.semester, self.admin)
+        with self.assertRaises(ReportIncomplete):
+            ajukan(card, self.admin)
+
+    def test_nilai_tidak_dapat_diubah_setelah_rapor_terbit(self):
+        self._lengkapi_nilai()
+        card = susun_report_card(self.siswa, self.semester, self.admin)
+        ajukan(card, self.admin)
+        setujui(card, self.admin)
+        terbitkan(card, self.admin)
+        before = FormativeScore.objects.count()
+
+        self.client.post(
+            reverse('akademik:formatif_entry', args=[self.mapel.id]),
+            {f'f_{self.siswa.id}_{self.tp1.id}': 4},
+        )
+        self.assertEqual(FormativeScore.objects.count(), before)
+
+        assessment = Assessment.objects.filter(subject=self.mapel).first()
+        component = assessment.components.first()
+        response = self.client.post(
+            reverse('akademik:asesmen_simpan', args=[assessment.id]),
+            data=json.dumps({
+                'student': self.siswa.id, 'component': component.id, 'nilai': 99,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_halaman_rapor_dan_pdf(self):
+        self._lengkapi_nilai()
+        card = susun_report_card(self.siswa, self.semester, self.admin)
+        urls = [
+            reverse('akademik:rapor_index'),
+            reverse('akademik:rapor_detail', args=[self.siswa.id]),
+            reverse('akademik:rapor_sampul', args=[self.siswa.id]),
+            reverse('akademik:cetak_semua'),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+        pdf = self.client.get(reverse('akademik:rapor_pdf', args=[self.siswa.id]))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+        self.assertTrue(pdf.content.startswith(b'%PDF'))
+
+        pdf_semua = self.client.get(reverse('akademik:rapor_pdf_semua'))
+        self.assertEqual(pdf_semua.status_code, 200)
+        self.assertTrue(pdf_semua.content.startswith(b'%PDF'))
+
+        self.assertEqual(card.student, self.siswa)
+
+    def test_aksi_workflow_lewat_halaman(self):
+        self._lengkapi_nilai()
+        card = susun_report_card(self.siswa, self.semester, self.admin)
+        response = self.client.post(reverse('akademik:rapor_ajukan', args=[card.id]))
+        self.assertEqual(response.status_code, 302)
+        card.refresh_from_db()
+        self.assertEqual(card.status, 'REVIEW')
+        self.assertEqual(self.client.get(reverse('akademik:rapor_index')).status_code, 200)
+
+        self.client.post(reverse('akademik:rapor_setujui', args=[card.id]))
+        card.refresh_from_db()
+        self.assertEqual(card.status, 'APPROVED')
+        self.assertEqual(self.client.get(reverse('akademik:rapor_index')).status_code, 200)
+
+        self.client.post(reverse('akademik:rapor_terbitkan', args=[card.id]))
+        card.refresh_from_db()
+        self.assertEqual(card.status, 'PUBLISHED')
+        self.assertEqual(self.client.get(reverse('akademik:rapor_index')).status_code, 200)
+
+        self.client.post(
+            reverse('akademik:rapor_buka_kunci', args=[card.id]),
+            {'alasan': 'Perbaikan nilai'},
+        )
+        card.refresh_from_db()
+        self.assertEqual(card.status, 'REVISI')
+        self.assertTrue(
+            card.nilai_mapel.filter(subject=self.mapel).exists()
+        )

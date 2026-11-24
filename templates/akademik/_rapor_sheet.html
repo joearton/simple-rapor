@@ -31,7 +31,7 @@
         <td class="value">{{ student.nama }}</td>
         <td class="label">Kelas</td>
         <td class="colon">:</td>
-        <td class="value">{{ student.class_group.nama_lengkap }}</td>
+        <td class="value">{% if class_group %}{{ class_group.nama_lengkap }}{% else %}{{ student.class_group.nama_lengkap }}{% endif %}</td>
       </tr>
       <tr>
         <td class="label">NIS / NISN</td>
@@ -39,7 +39,7 @@
         <td class="value">{{ student.nis|default:"-" }} / {{ student.nisn|default:"-" }}</td>
         <td class="label">Fase</td>
         <td class="colon">:</td>
-        <td class="value">{{ student.class_group.fase }}</td>
+        <td class="value">{% if class_group %}{{ class_group.fase }}{% else %}{{ student.class_group.fase }}{% endif %}</td>
       </tr>
       <tr>
         <td class="label">Sekolah</td>
@@ -145,7 +145,7 @@
       <div class="signature-col tengah">
         <div class="role">{{ school.label_ttd_wali }}</div>
         <div class="space"></div>
-        <div class="name">{{ student.class_group.nama_wali|default:"-" }}</div>
+        <div class="name">{% if class_group %}{{ class_group.nama_wali|default:"-" }}{% else %}{{ student.class_group.nama_wali|default:"-" }}{% endif %}</div>
       </div>
       {% endif %}
     </div>

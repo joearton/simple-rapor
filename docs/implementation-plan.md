@@ -79,12 +79,24 @@ Rancangan ini **belum mengubah skema inti** secara besar. Persetujuan diperlukan
 
 **Kriteria terima:** hasil perhitungan identik dengan Excel untuk data contoh; satu siswa tidak punya result ganda; komponen kosong tidak dihitung nol.
 
-## Tahap 5 — Rapor, approval, publikasi
+## Tahap 5 — Rapor, approval, publikasi (selesai)
 1. `ReportCard`, `ReportSubjectGrade`, `ReportCompetencyDescription`.
 2. Catatan/absensi/ekskul terhubung ke report card.
 3. Alur DRAF → REVIEW → APPROVED → PUBLISHED, unlock dengan audit.
 4. PDF WeasyPrint, leger kelas/mapel, rekap semester.
 5. Pemeriksaan kelengkapan sebelum submit.
+
+**Catatan implementasi:**
+- `susun_report_card()` menyimpan snapshot nilai, deskripsi, catatan, absensi,
+  dan ekstrakurikuler. Perubahan nilai sumber setelah snapshot tidak mengubah
+  rapor yang sudah tersusun.
+- Alur status dijaga service: ajukan (cek kelengkapan) → setujui → terbitkan
+  (kunci) → buka kunci (REVISI + audit).
+- Nilai/catatan/ekskul/asesmen ditolak saat rapor kelas sudah `PUBLISHED`.
+- PDF dibuat dengan WeasyPrint dari template rapor yang sama; cetak massal
+  tersedia untuk satu kelas.
+- `Subject` memakai `PROTECT` pada snapshot rapor agar mapel bersejarah tidak
+  terhapus.
 
 **Kriteria terima:** rapor terkunci tidak dapat diubah; PDF sesuai layout sekolah; cetak massal berhasil.
 

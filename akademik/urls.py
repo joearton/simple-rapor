@@ -103,6 +103,15 @@ urlpatterns = [
 
     path('rapor/', views.rapor_index, name='rapor_index'),
     path('rapor/cetak-semua/', views.cetak_semua, name='cetak_semua'),
+    path('rapor/susun-semua/', views.rapor_susun_semua, name='rapor_susun_semua'),
+    path('rapor/pdf-semua/', views.rapor_pdf_semua, name='rapor_pdf_semua'),
     path('rapor/<int:student_id>/', views.rapor_detail, name='rapor_detail'),
+    path('rapor/<int:student_id>/susun/', views.rapor_susun, name='rapor_susun'),
+    path('rapor/<int:student_id>/pdf/', views.rapor_pdf, name='rapor_pdf'),
+    path('rapor/<int:pk>/ajukan/', views.rapor_ajukan, name='rapor_ajukan'),
+    path('rapor/<int:pk>/setujui/', views.rapor_setujui, name='rapor_setujui'),
+    path('rapor/<int:pk>/terbitkan/', views.rapor_terbitkan, name='rapor_terbitkan'),
+    path('rapor/<int:pk>/buka-kunci/', views.rapor_buka_kunci, name='rapor_buka_kunci'),
+    path('rapor/<int:pk>/kembalikan/', views.rapor_kembalikan, name='rapor_kembalikan'),
     path('rapor/<int:student_id>/sampul/', views.rapor_sampul, name='rapor_sampul'),
 ]

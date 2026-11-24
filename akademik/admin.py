@@ -21,6 +21,10 @@ from .models import (
     LearningOutcome,
     LearningTask,
     LearningTaskSubmission,
+    ReportCard,
+    ReportCompetencyDescription,
+    ReportExtracurricular,
+    ReportSubjectGrade,
     School,
     Semester,
     Student,
@@ -223,6 +227,39 @@ class AssessmentRubricAdmin(admin.ModelAdmin):
 class GradeConfigurationAdmin(admin.ModelAdmin):
     list_display = ('__str__', 'bobot_lm', 'bobot_sts', 'bobot_sas', 'aktif')
     list_filter = ('aktif', 'academic_year', 'subject')
+
+
+class ReportSubjectGradeInline(admin.TabularInline):
+    model = ReportSubjectGrade
+    extra = 0
+    readonly_fields = ('nilai_akhir',)
+
+
+@admin.register(ReportCard)
+class ReportCardAdmin(admin.ModelAdmin):
+    list_display = ('student', 'class_group', 'semester', 'status', 'approved_by', 'published_at')
+    list_filter = ('status', 'semester', 'class_group')
+    search_fields = ('student__nama', 'student__nis', 'student__nisn')
+    inlines = [ReportSubjectGradeInline]
+
+
+@admin.register(ReportSubjectGrade)
+class ReportSubjectGradeAdmin(admin.ModelAdmin):
+    list_display = ('report_card', 'subject', 'nilai_akhir', 'predikat')
+    list_filter = ('report_card__semester', 'subject')
+    search_fields = ('report_card__student__nama', 'subject__nama')
+
+
+@admin.register(ReportCompetencyDescription)
+class ReportCompetencyDescriptionAdmin(admin.ModelAdmin):
+    list_display = ('subject_grade', 'tipe', 'objective', 'urutan')
+    list_filter = ('tipe',)
+
+
+@admin.register(ReportExtracurricular)
+class ReportExtracurricularAdmin(admin.ModelAdmin):
+    list_display = ('report_card', 'urutan', 'nama', 'predikat')
+    list_filter = ('report_card__semester',)
 
 
 @admin.register(AuditLog)

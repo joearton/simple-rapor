@@ -1092,6 +1092,188 @@ class AssessmentRubric(models.Model):
         return f'{self.component.nama} - {self.level}'
 
 
+class ReportCard(models.Model):
+    """Rapor siswa per semester beserta status persetujuan/publikasi."""
+
+    STATUS = [
+        ('DRAF', 'Draf'),
+        ('REVIEW', 'Diajukan'),
+        ('APPROVED', 'Disetujui'),
+        ('PUBLISHED', 'Terbit'),
+        ('REVISI', 'Perlu Revisi'),
+    ]
+
+    student = models.ForeignKey(
+        Student, on_delete=models.CASCADE, related_name='report_cards',
+        verbose_name='Peserta Didik',
+    )
+    class_group = models.ForeignKey(
+        ClassGroup, on_delete=models.PROTECT, related_name='report_cards',
+        verbose_name='Kelas',
+    )
+    semester = models.ForeignKey(
+        Semester, on_delete=models.CASCADE, related_name='report_cards',
+        verbose_name='Semester',
+    )
+    nomor_urut = models.PositiveSmallIntegerField('Nomor Urut', default=0)
+    status = models.CharField(max_length=10, choices=STATUS, default='DRAF')
+    catatan_wali = models.TextField('Catatan Wali Kelas', blank=True)
+    sakit = models.PositiveSmallIntegerField(default=0)
+    izin = models.PositiveSmallIntegerField(default=0)
+    alpa = models.PositiveSmallIntegerField(default=0)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='report_dibuat', verbose_name='Disusun Oleh',
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='report_disetujui', verbose_name='Disetujui Oleh',
+    )
+    approved_at = models.DateTimeField('Disetujui Pada', null=True, blank=True)
+    published_at = models.DateTimeField('Diterbitkan Pada', null=True, blank=True)
+    locked_at = models.DateTimeField('Dikunci Pada', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('student', 'semester')]
+        ordering = ['class_group__tingkat', 'class_group__nama', 'nomor_urut']
+        verbose_name = 'Rapor'
+        verbose_name_plural = 'Rapor'
+
+    def __str__(self):
+        return f'Rapor {self.student.nama} - {self.semester}'
+
+    @property
+    def catatan(self):
+        return self.catatan_wali
+
+    @property
+    def terkunci(self):
+        return self.status == 'PUBLISHED'
+
+    @property
+    def bisa_diubah(self):
+        return self.status in ('DRAF', 'REVISI')
+
+    def clean(self):
+        errors = {}
+        if self.semester_id and self.class_group_id:
+            if self.class_group.academic_year_id != self.semester.academic_year_id:
+                errors['class_group'] = 'Kelas bukan milik tahun pelajaran semester.'
+        if self.student_id and self.semester_id:
+            enrollment = self.student.enrollments.filter(
+                academic_year=self.semester.academic_year_id
+            ).first()
+            if enrollment is None:
+                errors['student'] = 'Siswa tidak terdaftar pada tahun pelajaran semester.'
+            elif self.class_group_id and enrollment.class_group_id != self.class_group_id:
+                errors['class_group'] = (
+                    'Kelas tidak sesuai dengan riwayat penempatan siswa.'
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.semester_id and not self.nomor_urut:
+            self.nomor_urut = self.student.no_urut
+        super().save(*args, **kwargs)
+
+
+class ReportSubjectGrade(models.Model):
+    """Snapshot nilai rapor per mata pelajaran."""
+
+    report_card = models.ForeignKey(
+        ReportCard, on_delete=models.CASCADE, related_name='nilai_mapel',
+        verbose_name='Rapor',
+    )
+    subject = models.ForeignKey(
+        Subject, on_delete=models.PROTECT, related_name='nilai_rapor',
+        verbose_name='Mata Pelajaran',
+    )
+    nilai_lm = models.DecimalField(
+        'Rata-rata LM', max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    nilai_sts = models.DecimalField(
+        'STS', max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    nilai_sas = models.DecimalField(
+        'Rata-rata SAS', max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    nilai_akhir = models.DecimalField(
+        'Nilai Akhir', max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    predikat = models.CharField('Predikat', max_length=5, blank=True)
+    deskripsi_otomatis = models.TextField('Deskripsi Otomatis', blank=True)
+    deskripsi_final = models.TextField('Deskripsi Final', blank=True)
+    urutan = models.PositiveSmallIntegerField('Urutan', default=0)
+
+    class Meta:
+        unique_together = [('report_card', 'subject')]
+        ordering = ['urutan', 'subject__urutan']
+        verbose_name = 'Nilai Rapor'
+        verbose_name_plural = 'Nilai Rapor'
+
+    def __str__(self):
+        return f'{self.subject.nama} - {self.report_card}'
+
+    @property
+    def nilai(self):
+        return self.nilai_akhir
+
+    @property
+    def capaian(self):
+        return self.deskripsi_final or self.deskripsi_otomatis
+
+
+class ReportCompetencyDescription(models.Model):
+    """Jejak TP yang mendasari deskripsi capaian pada rapor."""
+
+    TIPE = [('UNGGUL', 'Unggul'), ('PERLU', 'Perlu Bimbingan')]
+
+    subject_grade = models.ForeignKey(
+        ReportSubjectGrade, on_delete=models.CASCADE, related_name='kompetensi',
+        verbose_name='Nilai Rapor',
+    )
+    objective = models.ForeignKey(
+        LearningObjective, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='deskripsi_rapor', verbose_name='Tujuan Pembelajaran',
+    )
+    tipe = models.CharField(max_length=10, choices=TIPE)
+    teks = models.TextField('Deskripsi')
+    urutan = models.PositiveSmallIntegerField('Urutan', default=1)
+
+    class Meta:
+        ordering = ['urutan']
+        verbose_name = 'Deskripsi Kompetensi Rapor'
+        verbose_name_plural = 'Deskripsi Kompetensi Rapor'
+
+    def __str__(self):
+        return f'{self.get_tipe_display()} - {self.teks[:60]}'
+
+
+class ReportExtracurricular(models.Model):
+    """Snapshot ekstrakurikuler pada rapor."""
+
+    report_card = models.ForeignKey(
+        ReportCard, on_delete=models.CASCADE, related_name='ekskul',
+        verbose_name='Rapor',
+    )
+    urutan = models.PositiveSmallIntegerField('Urutan', default=1)
+    nama = models.CharField('Ekstrakurikuler', max_length=100, blank=True)
+    predikat = models.CharField('Predikat', max_length=5, blank=True)
+    deskripsi = models.CharField('Deskripsi', max_length=200, blank=True)
+
+    class Meta:
+        unique_together = [('report_card', 'urutan')]
+        ordering = ['urutan']
+        verbose_name = 'Ekstrakurikuler Rapor'
+        verbose_name_plural = 'Ekstrakurikuler Rapor'
+
+    def __str__(self):
+        return f'{self.nama} - {self.report_card}'
+
+
 class FormativeScore(models.Model):
     """Nilai asesmen formatif per Tujuan Pembelajaran (skala 1-4)."""
 
