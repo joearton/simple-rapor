@@ -36,6 +36,7 @@
   </div>
   <form class="filter-bar" method="get">
     <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    {% include 'akademik/_filter_kelas.html' %}
     <select class="form-input" name="status">
       <option value="">Semua siswa</option>
       <option value="sudah" {% if status_filter == 'sudah' %}selected{% endif %}>Sudah dinilai</option>

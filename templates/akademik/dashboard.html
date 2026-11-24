@@ -9,7 +9,7 @@
   <h2>{{ guru.nama }}</h2>
   <p>
     {% if is_admin_sekolah %}Administrator{% else %}{{ guru.jabatan|default:"Guru" }}{% endif %}
-    {% if is_wali_kelas %}&middot; Wali Kelas {{ kelas_aktif.nama_lengkap }}{% endif %}
+    {% if is_wali_kelas %}&middot; Wali Kelas {{ kelas.nama_lengkap }}{% endif %}
     &middot; {{ total_mapel }} mata pelajaran dapat Anda kelola.
   </p>
   {% elif kepala %}
@@ -21,6 +21,13 @@
   {% endif %}
 </div>
 
+{% if kelas_list %}
+<form class="filter-bar" method="get" style="border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px">
+  <label for="kelas" style="font-size:12px;font-weight:600;color:#3d4d45">Kelas</label>
+  {% include 'akademik/_filter_kelas.html' %}
+  <button class="btn btn-sm btn-primary" type="submit">Terapkan</button>
+</form>
+{% endif %}
 {% if not is_admin_sekolah and not guru and not kepala %}
 <div class="alert error">Akun ini belum terhubung dengan Data Guru. Hubungi admin sekolah untuk menghubungkan akun.</div>
 {% endif %}
@@ -29,7 +36,7 @@
   <div class="stat">
     <div class="label">Peserta Didik</div>
     <div class="value">{{ total_siswa }}</div>
-    <div class="note">Kelas {{ kelas_aktif.nama_lengkap|default:"-" }}</div>
+    <div class="note">Kelas {{ kelas.nama_lengkap|default:"-" }}</div>
   </div>
   <div class="stat">
     <div class="label">{% if is_admin_sekolah or kepala %}Mata Pelajaran{% else %}Mapel Diampu{% endif %}</div>
@@ -49,8 +56,8 @@
     <div class="note">{{ jumlah_penugasan }} penugasan &middot; {{ jumlah_wali }} wali kelas</div>
     {% else %}
     <div class="label">Wali Kelas</div>
-    <div class="value" style="font-size:15px;line-height:1.45;margin-top:8px">{{ kelas_aktif.nama_wali|default:"-" }}</div>
-    <div class="note">NKTAM {{ kelas_aktif.nktam_wali_aktif|default:"-" }}</div>
+    <div class="value" style="font-size:15px;line-height:1.45;margin-top:8px">{{ kelas.nama_wali|default:"-" }}</div>
+    <div class="note">NKTAM {{ kelas.nktam_wali_aktif|default:"-" }}</div>
     {% endif %}
   </div>
 </div>

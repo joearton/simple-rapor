@@ -26,7 +26,7 @@
     <p>Rekap nilai rapor seluruh mata pelajaran &middot; Kelas {{ class_group.nama_lengkap|default:"-" }} &middot; Semester {{ semester.nama|default:"-" }} {{ semester.academic_year.tahun|default:"" }}.</p>
   </div>
   <div class="actions">
-    <a class="btn" href="{% url 'akademik:ekspor' 'leger' %}"><svg class="icon"><use href="#i-file"/></svg> Ekspor Excel</a>
+    <a class="btn" href="{% url 'akademik:ekspor' 'leger' %}?kelas={{ class_group.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor Excel</a>
     <button type="button" class="btn btn-gold" onclick="window.print()"><svg class="icon"><use href="#i-printer"/></svg> Cetak Leger</button>
     <a class="btn" href="{% url 'akademik:rapor_index' %}"><svg class="icon"><use href="#i-file"/></svg> Cetak Rapor</a>
   </div>
@@ -39,6 +39,7 @@
   </div>
   <form class="filter-bar" id="filter-leger" method="get">
     <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    {% include 'akademik/_filter_kelas.html' %}
     <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
     <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
   </form>

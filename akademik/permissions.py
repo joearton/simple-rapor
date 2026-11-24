@@ -144,6 +144,14 @@ def penugasan_mapel(user, subject, class_group=None):
 def boleh_kelola_mapel(user, subject, class_group=None):
     if is_admin(user):
         return True
+    guru = get_teacher(user)
+    if guru is None:
+        return False
+    if class_group is None:
+        return TeachingAssignment.objects.filter(
+            teacher=guru, subject=subject,
+            academic_year=subject.academic_year_id,
+        ).exists()
     return penugasan_mapel(user, subject, class_group) is not None
 
 
@@ -160,19 +168,18 @@ def guru_penilai(user, subject, class_group=None):
 
 
 def mapel_untuk_user(user):
-    """Mapel yang boleh diakses pengguna pada tahun dan kelas aktif."""
+    """Mapel yang diampu pengguna pada tahun aktif, lintas kelas."""
     from .models import Subject
 
     semester = active_semester()
-    kelas = active_class()
     tahun = semester.academic_year if semester else None
     base = Subject.objects.filter(academic_year=tahun) if tahun else Subject.objects.none()
     if is_admin(user):
         return base
     guru = get_teacher(user)
-    if guru is None or kelas is None:
+    if guru is None:
         return Subject.objects.none()
-    penugasan_filter = Q(penugasan__teacher=guru, penugasan__class_group=kelas)
+    penugasan_filter = Q(penugasan__teacher=guru)
     if semester is not None:
         penugasan_filter &= (
             Q(penugasan__semester=semester) | Q(penugasan__semester__isnull=True)

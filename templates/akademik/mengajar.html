@@ -19,6 +19,7 @@
 
 <form class="filter-bar" method="get" style="border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px">
   <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari mata pelajaran...">
+  {% include 'akademik/_filter_kelas.html' %}
   <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
   <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
 </form>

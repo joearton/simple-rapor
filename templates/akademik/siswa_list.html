@@ -7,13 +7,13 @@
 <div class="page-head">
   <div>
     <h2>Data Siswa</h2>
-    <p>{{ total }} peserta didik pada kelas {{ kelas_aktif.nama_lengkap|default:"-" }}.</p>
+    <p>{{ total }} peserta didik{% if kelas %} pada kelas {{ kelas.nama_lengkap }}{% else %} pada tahun pelajaran aktif{% endif %}.</p>
   </div>
   <div class="actions">
     {% if bisa_ubah %}
-    <a class="btn" href="{% url 'akademik:ekspor' 'siswa' %}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
-    <a class="btn" href="{% url 'akademik:impor' 'siswa' %}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
-    <a class="btn btn-primary" href="{% url 'akademik:siswa_tambah' %}"><svg class="icon"><use href="#i-plus"/></svg> Tambah Siswa</a>
+    <a class="btn" href="{% url 'akademik:ekspor' 'siswa' %}{% if kelas %}?kelas={{ kelas.id }}{% endif %}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+    <a class="btn" href="{% url 'akademik:impor' 'siswa' %}{% if kelas %}?kelas={{ kelas.id }}{% endif %}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+    <a class="btn btn-primary" href="{% url 'akademik:siswa_tambah' %}{% if kelas %}?kelas={{ kelas.id }}{% endif %}"><svg class="icon"><use href="#i-plus"/></svg> Tambah Siswa</a>
     {% endif %}
   </div>
 </div>
@@ -25,6 +25,7 @@
   </div>
   <form class="filter-bar" id="filter-siswa-list" method="get">
     <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    {% include 'akademik/_filter_kelas.html' %}
     <select class="form-input" name="jk">
       <option value="">Semua L/P</option>
       <option value="L" {% if jk_filter == 'L' %}selected{% endif %}>Laki-Laki</option>

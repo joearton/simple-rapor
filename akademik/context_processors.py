@@ -1,6 +1,5 @@
 from .models import AcademicYear, Semester, School
 from .permissions import (
-    active_class,
     get_teacher,
     is_admin,
     is_kepala_sekolah,
@@ -18,7 +17,6 @@ def sekolah(request):
         'sekolah': School.get_solo(),
         'semester_aktif': Semester.get_aktif(),
         'daftar_tahun': AcademicYear.objects.all(),
-        'kelas_aktif': active_class(),
         'is_admin_sekolah': is_admin(user),
         'is_super_admin_sekolah': is_super_admin(user),
         'is_kepala_sekolah': is_kepala_sekolah(user),

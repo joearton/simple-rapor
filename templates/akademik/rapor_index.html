@@ -9,12 +9,12 @@
     <p>Susun snapshot nilai, ajukan review, setujui, lalu terbitkan. Rapor terbit terkunci.</p>
   </div>
   <div class="actions">
-    <form method="post" action="{% url 'akademik:rapor_susun_semua' %}" class="inline-form">
+    <form method="post" action="{% url 'akademik:rapor_susun_semua' %}{% if kelas %}?kelas={{ kelas.id }}{% endif %}" class="inline-form">
       {% csrf_token %}
       <button class="btn" type="submit"><svg class="icon"><use href="#i-save"/></svg> Susun Semua</button>
     </form>
-    <a class="btn" href="{% url 'akademik:rapor_pdf_semua' %}"><svg class="icon"><use href="#i-file"/></svg> PDF Semua</a>
-    <a class="btn btn-gold" href="{% url 'akademik:cetak_semua' %}" target="_blank"><svg class="icon"><use href="#i-printer"/></svg> Cetak Semua</a>
+    <a class="btn" href="{% url 'akademik:rapor_pdf_semua' %}{% if kelas %}?kelas={{ kelas.id }}{% endif %}"><svg class="icon"><use href="#i-file"/></svg> PDF Semua</a>
+    <a class="btn btn-gold" href="{% url 'akademik:cetak_semua' %}{% if kelas %}?kelas={{ kelas.id }}{% endif %}" target="_blank"><svg class="icon"><use href="#i-printer"/></svg> Cetak Semua</a>
   </div>
 </div>
 
@@ -25,6 +25,7 @@
   </div>
   <form class="filter-bar" id="filter-rapor-index" method="get">
     <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    {% include 'akademik/_filter_kelas.html' %}
     <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
     <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
   </form>

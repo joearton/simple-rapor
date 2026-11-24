@@ -113,7 +113,6 @@ from .services import (
     data_rapor,
     deskripsi_capaian,
     hitung_nilai,
-    kelas_aktif,
     konfigurasi_nilai,
     nilai_formatif_map,
     ringkasan_sumatif,
@@ -149,8 +148,26 @@ class UbahPasswordView(PasswordChangeView):
         return super().form_valid(form)
 
 
-def _kelas():
-    return kelas_aktif()
+def _kelas_terpilih(request, default=True, izinkan_semua=False):
+    """Pilih kelas dari query string; admin/kepala boleh melihat semua kelas."""
+    semester = _semester()
+    tahun = semester.academic_year if semester else AcademicYear.get_aktif()
+    qs = (
+        ClassGroup.objects.filter(academic_year=tahun).order_by('grade__urutan', 'nama')
+        if tahun else ClassGroup.objects.none()
+    )
+    admin = is_admin(request.user) or is_kepala_sekolah(request.user)
+    wali_qs = qs.filter(wali_kelas_guru__user=request.user) if not admin else qs.none()
+    if not admin and wali_qs.exists():
+        qs = wali_qs
+        izinkan_semua = False
+    kelas_id = request.GET.get('kelas') or request.POST.get('kelas') or ''
+    if not str(kelas_id).isdigit():
+        kelas_id = ''
+    kelas = qs.filter(pk=kelas_id).first() if kelas_id else None
+    if kelas is None and not (izinkan_semua and admin):
+        kelas = qs.filter(aktif=True).first() or qs.first()
+    return kelas, list(qs), bool(izinkan_semua and admin)
 
 
 def _semester():
@@ -217,7 +234,7 @@ def dashboard(request):
     if is_portal_siswa(request.user):
         return redirect('akademik:portal_dashboard')
     semester = _semester()
-    kelas = _kelas()
+    kelas, kelas_list, allow_semua = _kelas_terpilih(request)
     admin = is_admin(request.user)
     kepala = is_kepala_sekolah(request.user)
     guru = get_teacher(request.user)
@@ -277,6 +294,10 @@ def dashboard(request):
         'jumlah_penugasan': TeachingAssignment.objects.count(),
         'jumlah_wali': ClassGroup.objects.exclude(wali_kelas_guru=None).count(),
         'wali_kelas': is_wali_kelas(request.user),
+        'kelas': kelas,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': allow_semua,
     })
 
 
@@ -308,9 +329,17 @@ def identitas(request):
 def siswa_list(request):
     if not can_view_reports(request.user):
         return _tolak_halaman(request)
-    kelas = _kelas()
+    kelas, kelas_list, allow_semua = _kelas_terpilih(
+        request, izinkan_semua=True
+    )
+    semester = _semester()
+    tahun = semester.academic_year if semester else AcademicYear.get_aktif()
     if kelas:
-        qs = Student.objects.in_class(kelas)
+        qs = Student.objects.in_class(kelas).filter(aktif=True)
+    elif tahun:
+        qs = Student.objects.filter(
+            enrollments__academic_year=tahun
+        ).distinct()
     else:
         qs = Student.objects.none()
     q = _q(request)
@@ -323,7 +352,7 @@ def siswa_list(request):
         qs = qs.filter(aktif=True)
     elif status == 'nonaktif':
         qs = qs.filter(aktif=False)
-    page_obj = _paginate(request, qs.order_by('no_urut'))
+    page_obj = _paginate(request, qs.order_by('class_group__tingkat', 'no_urut'))
     return render(request, 'akademik/siswa_list.html', {
         'siswa_list': page_obj,
         'page_obj': page_obj,
@@ -332,6 +361,10 @@ def siswa_list(request):
         'q': q,
         'jk_filter': jk,
         'status_filter': status,
+        'kelas': kelas,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': allow_semua,
     })
 
 
@@ -339,7 +372,7 @@ def siswa_list(request):
 @admin_required
 def siswa_form(request, pk=None):
     siswa = get_object_or_404(Student, pk=pk) if pk else None
-    kelas = _kelas()
+    kelas, _kelas_list, _allow = _kelas_terpilih(request)
     if request.method == 'POST':
         form = StudentForm(request.POST, instance=siswa)
         if form.is_valid():
@@ -351,7 +384,9 @@ def siswa_form(request, pk=None):
             return redirect('akademik:siswa_list')
     else:
         form = StudentForm(instance=siswa)
-    return render(request, 'akademik/siswa_form.html', {'form': form, 'siswa': siswa})
+    return render(request, 'akademik/siswa_form.html', {
+        'form': form, 'siswa': siswa, 'kelas': kelas,
+    })
 
 
 @login_required
@@ -485,12 +520,12 @@ def tp_list(request, subject_id):
 @login_required
 def formatif_entry(request, subject_id):
     subject = get_object_or_404(Subject, pk=subject_id)
-    if not boleh_kelola_mapel(request.user, subject):
+    kelas, kelas_list, allow_semua = _kelas_terpilih(request)
+    if not boleh_kelola_mapel(request.user, subject, kelas):
         return _tolak_mapel(request)
     semester = _semester()
     objectives = list(tujuan_aktif(subject, semester)) if semester else []
-    kelas = _kelas()
-    guru = guru_penilai(request.user, subject)
+    guru = guru_penilai(request.user, subject, kelas)
     q = _q(request)
     status = request.GET.get('status') or ''
     base = (
@@ -581,6 +616,10 @@ def formatif_entry(request, subject_id):
         'q': q,
         'status_filter': status,
         'page_obj': page_obj,
+        'kelas': kelas,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': allow_semua,
         'tp_data': [
             {'id': tp.id, 'nomor': tp.nomor, 'deskripsi': tp.deskripsi}
             for tp in objectives
@@ -591,11 +630,11 @@ def formatif_entry(request, subject_id):
 @login_required
 def sumatif_entry(request, subject_id):
     subject = get_object_or_404(Subject, pk=subject_id)
-    if not boleh_kelola_mapel(request.user, subject):
+    kelas, kelas_list, allow_semua = _kelas_terpilih(request)
+    if not boleh_kelola_mapel(request.user, subject, kelas):
         return _tolak_mapel(request)
     semester = _semester()
-    guru = guru_penilai(request.user, subject)
-    kelas = _kelas()
+    guru = guru_penilai(request.user, subject, kelas)
     q = _q(request)
     status = request.GET.get('status') or ''
     base = (
@@ -659,6 +698,9 @@ def sumatif_entry(request, subject_id):
         'lm_range': range(1, MAX_LM + 1),
         'guru': guru,
         'kelas': kelas,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': allow_semua,
         'q': q,
         'status_filter': status,
         'page_obj': page_obj,
@@ -667,7 +709,7 @@ def sumatif_entry(request, subject_id):
 
 @login_required
 def catatan_entry(request):
-    kelas = _kelas()
+    kelas, kelas_list, allow_semua = _kelas_terpilih(request)
     if not can_manage_homeroom(request.user, kelas):
         messages.error(request, 'Catatan hanya dapat diisi oleh wali kelas atau admin.')
         return redirect('akademik:dashboard')
@@ -720,6 +762,9 @@ def catatan_entry(request):
         'rows': rows,
         'guru': guru,
         'kelas': kelas,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': allow_semua,
         'q': q,
         'status_filter': status,
         'page_obj': page_obj,
@@ -728,10 +773,10 @@ def catatan_entry(request):
 
 @login_required
 def ekskul_list(request):
-    if not (is_admin(request.user) or is_kepala_sekolah(request.user) or can_manage_homeroom(request.user, _kelas())):
+    kelas, kelas_list, allow_semua = _kelas_terpilih(request)
+    if not (is_admin(request.user) or is_kepala_sekolah(request.user) or can_manage_homeroom(request.user, kelas)):
         return _tolak_halaman(request)
     semester = _semester()
-    kelas = _kelas()
     admin = is_admin(request.user)
     q = _q(request)
     status = request.GET.get('status') or ''
@@ -758,6 +803,9 @@ def ekskul_list(request):
         'page_obj': page_obj,
         'semester': semester,
         'kelas': kelas,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': allow_semua,
         'q': q,
         'status_filter': status,
         'bisa_kelola': admin,
@@ -807,7 +855,7 @@ def ekskul_hapus(request, pk):
 @login_required
 def ekskul_nilai(request, slug):
     activity = get_object_or_404(ExtracurricularActivity, slug=slug)
-    kelas = _kelas()
+    kelas, kelas_list, allow_semua = _kelas_terpilih(request)
     semester = _semester()
     guru_login = get_teacher(request.user)
     boleh = (
@@ -879,6 +927,9 @@ def ekskul_nilai(request, slug):
         'rows': rows,
         'semester': semester,
         'kelas': kelas,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': allow_semua,
         'guru': guru,
         'q': q,
         'status_filter': status,
@@ -948,7 +999,7 @@ def ekskul_predikat_hapus(request, pk):
 def leger(request):
     if not can_view_reports(request.user):
         return _tolak_halaman(request)
-    class_group = _kelas()
+    class_group, kelas_list, allow_semua = _kelas_terpilih(request)
     semester = _semester()
     q = _q(request)
     base = (
@@ -961,6 +1012,9 @@ def leger(request):
         'leger': data_leger(class_group, semester, students=page_obj.object_list),
         'semester': semester,
         'class_group': class_group,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(class_group.id) if class_group else '',
+        'allow_semua_kelas': allow_semua,
         'page_obj': page_obj,
         'q': q,
     })
@@ -970,7 +1024,7 @@ def leger(request):
 def rapor_index(request):
     if not can_view_reports(request.user):
         return _tolak_halaman(request)
-    kelas = _kelas()
+    kelas, kelas_list, allow_semua = _kelas_terpilih(request)
     semester = _semester()
     q = _q(request)
     base = (
@@ -997,6 +1051,10 @@ def rapor_index(request):
         'semester': semester,
         'page_obj': page_obj,
         'q': q,
+        'kelas': kelas,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': allow_semua,
         'bisa_kelola': can_view_reports(request.user),
         'bisa_setujui': is_admin(request.user) or is_kepala_sekolah(request.user),
         'bisa_buka': is_admin(request.user),
@@ -1032,7 +1090,8 @@ def cetak_semua(request):
     if not can_view_reports(request.user):
         return _tolak_halaman(request)
     semester = _semester()
-    students = daftar_siswa(_kelas())
+    kelas, _kelas_list, _allow = _kelas_terpilih(request)
+    students = daftar_siswa(kelas)
     data = [konteks_rapor_siswa(siswa, semester) for siswa in students]
     return render(request, 'akademik/rapor_semua.html', {
         'data': data,
@@ -1060,7 +1119,8 @@ def rapor_susun_semua(request):
     if not can_view_reports(request.user):
         return _tolak_halaman(request)
     semester = _semester()
-    siswa_qs = daftar_siswa(_kelas())
+    kelas, _kelas_list, _allow = _kelas_terpilih(request)
+    siswa_qs = daftar_siswa(kelas)
     berhasil = 0
     gagal = 0
     for siswa in siswa_qs:
@@ -1187,7 +1247,8 @@ def rapor_pdf_semua(request):
     if not can_view_reports(request.user):
         return _tolak_halaman(request)
     semester = _semester()
-    data = [konteks_rapor_siswa(siswa, semester) for siswa in daftar_siswa(_kelas())]
+    kelas, _kelas_list, _allow = _kelas_terpilih(request)
+    data = [konteks_rapor_siswa(siswa, semester) for siswa in daftar_siswa(kelas)]
     html = render_to_string(
         'akademik/rapor_semua.html',
         {'data': data, 'semester': semester, 'school': School.get_solo()},
@@ -1317,7 +1378,7 @@ def guru_hapus(request, pk):
 @login_required
 @admin_required
 def mapel_list(request):
-    kelas = _kelas()
+    kelas, kelas_list, allow_semua = _kelas_terpilih(request)
     semester = _semester()
     tahun_aktif = semester.academic_year if semester else AcademicYear.get_aktif()
     tahun_id = request.GET.get('tahun') or (tahun_aktif.id if tahun_aktif else '')
@@ -1360,6 +1421,9 @@ def mapel_list(request):
         'tahun': tahun,
         'tahun_id': str(tahun.id) if tahun else '',
         'daftar_tahun': AcademicYear.objects.all(),
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': False,
     })
 
 
@@ -1407,7 +1471,7 @@ def mapel_hapus(request, pk):
 @login_required
 @admin_required
 def mengajar(request):
-    kelas = _kelas()
+    kelas, kelas_list, allow_semua = _kelas_terpilih(request)
     semester = _semester()
     year = semester.academic_year if semester else AcademicYear.get_aktif()
     teachers = Teacher.objects.filter(aktif=True)
@@ -1470,6 +1534,9 @@ def mengajar(request):
         'rows': rows,
         'teachers': teachers,
         'kelas': kelas,
+        'kelas_list': kelas_list,
+        'kelas_filter': str(kelas.id) if kelas else '',
+        'allow_semua_kelas': allow_semua,
         'semester': semester,
         'wali_kelas_guru_id': kelas.wali_kelas_guru_id if kelas else None,
         'page_obj': page_obj,
@@ -1885,10 +1952,11 @@ def _subject_context(request):
 def _boleh_ekspor_impor(request, kind, subject=None):
     if kind in ('siswa', 'guru', 'mapel', 'kelas'):
         return is_admin(request.user)
+    kelas, _kelas_list, _allow = _kelas_terpilih(request)
     if kind in ('tp', 'formatif', 'sumatif', 'cp', 'materi', 'tugas'):
-        return subject is not None and boleh_kelola_mapel(request.user, subject)
+        return subject is not None and boleh_kelola_mapel(request.user, subject, kelas)
     if kind in ('catatan', 'ekskul'):
-        return can_manage_homeroom(request.user, _kelas())
+        return can_manage_homeroom(request.user, kelas)
     if kind == 'leger':
         return can_view_reports(request.user)
     return False
@@ -1936,7 +2004,7 @@ def ekspor_data(request, kind):
         messages.error(request, 'Pilih mata pelajaran terlebih dahulu.')
         return redirect('akademik:dashboard')
 
-    kelas = _kelas()
+    kelas, _kelas_list, _allow = _kelas_terpilih(request)
     semester = _semester()
     tahun = semester.academic_year if semester else None
     template = request.GET.get('template') == '1'
@@ -1991,7 +2059,7 @@ def impor_data(request, kind):
         messages.error(request, 'Pilih mata pelajaran terlebih dahulu.')
         return redirect('akademik:dashboard')
 
-    kelas = _kelas()
+    kelas, _kelas_list, _allow = _kelas_terpilih(request)
     semester = _semester()
     tahun = semester.academic_year if semester else None
     tahun_id = request.GET.get('tahun') or request.POST.get('tahun')
@@ -3168,30 +3236,6 @@ def pilih_tahun_pelajaran(request):
         deskripsi=f'Mengaktifkan tahun pelajaran {tahun.tahun}', request=request,
     )
     messages.success(request, f'Periode aktif diubah ke {tahun.tahun}.')
-    next_url = request.POST.get('next') or ''
-    if not next_url.startswith('/') or next_url.startswith('//'):
-        next_url = reverse('akademik:dashboard')
-    return redirect(next_url)
-
-
-@login_required
-def pilih_kelas(request):
-    if not (is_admin(request.user) or is_kepala_sekolah(request.user)):
-        messages.error(request, 'Anda tidak memiliki akses mengganti kelas aktif.')
-        return redirect('akademik:dashboard')
-    if request.method != 'POST':
-        return redirect('akademik:dashboard')
-    kelas = get_object_or_404(ClassGroup, pk=request.POST.get('kelas'))
-    tahun_aktif = AcademicYear.objects.filter(aktif=True).first()
-    if tahun_aktif is not None and kelas.academic_year_id != tahun_aktif.id:
-        messages.error(request, 'Kelas bukan bagian dari tahun pelajaran aktif.')
-        return redirect('akademik:dashboard')
-    _aktifkan_kelas_internal(kelas)
-    catat_audit(
-        request.user, 'ACTIVATE', kelas,
-        deskripsi=f'Mengaktifkan kelas {kelas.nama_lengkap}', request=request,
-    )
-    messages.success(request, f'Kelas aktif diubah ke {kelas.nama_lengkap}.')
     next_url = request.POST.get('next') or ''
     if not next_url.startswith('/') or next_url.startswith('//'):
         next_url = reverse('akademik:dashboard')

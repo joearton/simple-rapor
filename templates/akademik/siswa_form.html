@@ -11,7 +11,7 @@
 <div class="page-head">
   <div>
     <h2>{% if siswa %}{{ siswa.nama }}{% else %}Peserta Didik Baru{% endif %}</h2>
-    <p>Kelas {{ kelas_aktif.nama_lengkap|default:"-" }} &middot; {{ semester_aktif.academic_year.tahun|default:"-" }}</p>
+    <p>Kelas {{ kelas.nama_lengkap|default:"-" }} &middot; {{ semester_aktif.academic_year.tahun|default:"-" }}</p>
   </div>
 </div>
 

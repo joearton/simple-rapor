@@ -1,0 +1,8 @@
+{% if kelas_list %}
+<select class="form-input" name="kelas" aria-label="Filter kelas">
+  {% if allow_semua_kelas %}<option value="" {% if not kelas_filter %}selected{% endif %}>Semua kelas</option>{% endif %}
+  {% for k in kelas_list %}
+  <option value="{{ k.id }}" {% if kelas_filter == k.id|stringformat:'s' %}selected{% endif %}>{{ k.nama_lengkap }}</option>
+  {% endfor %}
+</select>
+{% endif %}

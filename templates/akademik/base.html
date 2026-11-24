@@ -93,8 +93,7 @@
     {% endwith %}
 
     <div class="sidebar-foot">
-      {{ semester_aktif.academic_year.tahun|default:"Tahun Pelajaran" }} &middot; Semester {{ semester_aktif.nama|default:"-" }}<br>
-      {{ kelas_aktif.nama_lengkap|default:"Kelas" }}
+      {{ semester_aktif.academic_year.tahun|default:"Tahun Pelajaran" }} &middot; Semester {{ semester_aktif.nama|default:"-" }}
     </div>
   </aside>
 
@@ -102,7 +101,7 @@
     <header class="topbar" id="topbar">
       <div>
         <h1 id="page-title">{% block topbar %}Aplikasi Penilaian &amp; Rapor{% endblock %}</h1>
-        <div class="sub">{{ sekolah.nama }}{% if kelas_aktif %} &middot; Kelas {{ kelas_aktif.nama_lengkap }}{% endif %}</div>
+        <div class="sub">{{ sekolah.nama }}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         {% if is_admin_sekolah or is_kepala_sekolah %}
@@ -116,18 +115,6 @@
           </select>
           <noscript><button type="submit" class="btn btn-sm">Terapkan</button></noscript>
         </form>
-        {% if kelas_aktif %}
-        <form class="period-form" id="class-form" method="post" action="{% url 'akademik:pilih_kelas' %}">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{{ request.get_full_path }}">
-          <select name="kelas" id="class-select" class="form-input" aria-label="Pilih kelas" onchange="this.form.submit()">
-            {% for k in kelas_aktif.academic_year.kelas_list.all %}
-            <option value="{{ k.id }}" {% if k.id == kelas_aktif.id %}selected{% endif %}>{{ k.nama_lengkap }}</option>
-            {% endfor %}
-          </select>
-          <noscript><button type="submit" class="btn btn-sm">Kelas</button></noscript>
-        </form>
-        {% endif %}
         {% endif %}
         <details class="user-menu" id="user-menu">
           <summary>

@@ -16,8 +16,8 @@
     <p>Nilai rapor = rata-rata dari Rata-rata LM, STS, dan Rata-rata SAS.{% if guru %} Guru penilai: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
   </div>
   <div class="actions">
-    <a class="btn" href="{% url 'akademik:ekspor' 'sumatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
-    <a class="btn" href="{% url 'akademik:impor' 'sumatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+    <a class="btn" href="{% url 'akademik:ekspor' 'sumatif' %}?mapel={{ subject.id }}&kelas={{ kelas.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+    <a class="btn" href="{% url 'akademik:impor' 'sumatif' %}?mapel={{ subject.id }}&kelas={{ kelas.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
     <a class="btn" href="{% url 'akademik:sumatif_menu' %}"><svg class="icon"><use href="#i-back"/></svg> Daftar Evaluasi</a>
     {% if is_admin_sekolah or is_wali_kelas %}<a class="btn" href="{% url 'akademik:leger' %}"><svg class="icon"><use href="#i-chart"/></svg> Leger</a>{% endif %}
   </div>
@@ -35,6 +35,7 @@
 
   <form class="filter-bar" id="filter-sumatif-entry" method="get">
     <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    {% include 'akademik/_filter_kelas.html' %}
     <select class="form-input" name="status">
       <option value="">Semua siswa</option>
       <option value="sudah" {% if status_filter == 'sudah' %}selected{% endif %}>Sudah ada nilai akhir</option>

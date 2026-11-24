@@ -23,6 +23,7 @@
   </div>
   <form class="filter-bar" method="get">
     <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari kegiatan...">
+    {% include 'akademik/_filter_kelas.html' %}
     <select class="form-input" name="status">
       <option value="">Semua status</option>
       <option value="aktif" {% if status_filter == 'aktif' %}selected{% endif %}>Aktif</option>
