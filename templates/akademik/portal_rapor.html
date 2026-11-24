@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rapor {{ student.nama }}</title>
-  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261124i">
-  <link rel="stylesheet" href="{% static 'css/rapor.css' %}?v=20261124i">
-  <style>@page { size: {{ school.lebar_kertas_mm }}mm {{ school.tinggi_kertas_mm }}mm; margin: 12mm 14mm; }</style>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261124k">
+  <link rel="stylesheet" href="{% static 'css/rapor.css' %}?v=20261124k">
+  <style>@page { size: {{ school.lebar_kertas_mm }}mm {{ school.tinggi_kertas_mm }}mm; margin: 10mm 12mm; }</style>
 </head>
 <body class="rapor-page">
   <div class="rapor-toolbar no-print">
     <a class="btn" href="{% url 'akademik:portal_dashboard' %}"><svg class="icon"><use href="#i-back"/></svg> Kembali</a>
     <div style="display:flex;gap:8px">
-      <a class="btn" href="{% url 'akademik:portal_rapor_pdf' report_card.id %}"><svg class="icon"><use href="#i-file"/></svg> Unduh PDF</a>
+      <a class="btn" href="{% url 'akademik:portal_rapor_pdf' report_card.id %}" target="_blank" rel="noopener"><svg class="icon"><use href="#i-file"/></svg> Unduh PDF</a>
       <button type="button" class="btn btn-gold" onclick="window.print()"><svg class="icon"><use href="#i-printer"/></svg> Cetak</button>
     </div>
   </div>

@@ -28,6 +28,11 @@
   justify-content: space-between;
   flex-wrap: wrap;
 }
+@media screen and (max-width: 820px) {
+  .rapor-page { padding: 10px; }
+  .rapor-toolbar { padding: 0 4px; }
+  .rapor-toolbar .btn { flex: 1 1 auto; justify-content: center; }
+}
 
 .rapor-head { display: flex; align-items: center; gap: 6mm; border-bottom: 3px double #111; padding-bottom: 8px; margin-bottom: 12px; }
 .rapor-head .rapor-kop { flex: 1; text-align: center; }
@@ -122,14 +127,31 @@ table.rapor-table tr { page-break-inside: avoid; }
 @media print {
   .rapor-page { padding: 0; }
   .rapor-sheet {
-    width: auto;
-    min-height: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
     margin: 0;
     padding: 0;
     border: 0;
     box-shadow: none;
-    font-size: 11pt;
+    font-size: 9.5pt !important;
+    line-height: 1.25 !important;
   }
+  .rapor-head { padding-bottom: 4px; margin-bottom: 8px; }
+  .rapor-head .sekolah { font-size: 1.15em; }
+  .rapor-title { margin: 8px 0 10px; }
+  .rapor-title h2 { font-size: 1.05em; }
+  .identitas-table { margin-bottom: 6px; }
+  .identitas-table td { padding: 1px 3px; }
+  table.rapor-table { font-size: 0.9em; }
+  table.rapor-table th,
+  table.rapor-table td { padding: 2px 4px; }
+  .rapor-subtitle { margin: 10px 0 4px; }
+  .rapor-footer-grid { margin-top: 8px; gap: 8px; }
+  .rapor-box { padding: 5px 8px; }
+  .signature-row { margin-top: 10px; }
+  .signature-col .space { height: 42px; }
+  .tanggal { margin-top: 2px; }
   .sampul-sheet { min-height: 0; height: 265mm; }
   .rapor-sheet.page-break { page-break-after: always; }
   .rapor-sheet:last-child { page-break-after: auto; }
