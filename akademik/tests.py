@@ -1067,6 +1067,7 @@ class ElemenUiTest(RaporTestBase):
         self.assertIn('id="form-siswa"', html)
         self.assertIn('placeholder="Masukkan', html)
         self.assertIn('data-help=', html)
+        self.assertIn('id_tahun_masuk', html)
         self.assertIn('id="app-layout"', html)
         self.assertIn('id="main-content"', html)
 

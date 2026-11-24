@@ -65,6 +65,11 @@
           {{ form.pendidikan_sebelumnya }}{{ form.pendidikan_sebelumnya.errors }}
         </div>
         <div class="field">
+          <label for="{{ form.tahun_masuk.id_for_label }}">Tahun Masuk</label>
+          {{ form.tahun_masuk }}{{ form.tahun_masuk.errors }}
+          <div class="help">{{ form.tahun_masuk.help_text }}</div>
+        </div>
+        <div class="field">
           <label for="{{ form.aktif.id_for_label }}">Status</label>
           <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">
             {{ form.aktif }} Aktif sebagai peserta didik
