@@ -12,6 +12,9 @@ from .models import (
     EvaluasiFormatif,
     EvaluasiSumatif,
     Extracurricular,
+    ExtracurricularActivity,
+    ExtracurricularEnrollment,
+    ExtracurricularPredicate,
     FormativeScore,
     Grade,
     GradeConfiguration,
@@ -175,6 +178,26 @@ class HomeroomNoteAdmin(admin.ModelAdmin):
 class ExtracurricularAdmin(admin.ModelAdmin):
     list_display = ('student', 'urutan', 'nama', 'predikat', 'guru')
     list_filter = ('semester', 'guru')
+
+
+@admin.register(ExtracurricularActivity)
+class ExtracurricularActivityAdmin(admin.ModelAdmin):
+    list_display = ('nama', 'pembina', 'urutan', 'aktif')
+    list_filter = ('aktif', 'pembina')
+    search_fields = ('nama', 'deskripsi')
+
+
+@admin.register(ExtracurricularPredicate)
+class ExtracurricularPredicateAdmin(admin.ModelAdmin):
+    list_display = ('label', 'batas_min', 'urutan', 'aktif')
+    list_editable = ('batas_min', 'urutan', 'aktif')
+
+
+@admin.register(ExtracurricularEnrollment)
+class ExtracurricularEnrollmentAdmin(admin.ModelAdmin):
+    list_display = ('student', 'activity', 'semester', 'nilai', 'predikat')
+    list_filter = ('activity', 'semester', 'activity__aktif')
+    search_fields = ('student__nama', 'activity__nama')
 
 
 @admin.register(EvaluasiFormatif)

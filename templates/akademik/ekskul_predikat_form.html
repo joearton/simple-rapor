@@ -1,0 +1,55 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if predikat %}Ubah Predikat{% else %}Tambah Predikat{% endif %}{% endblock %}
+{% block topbar %}{% if predikat %}Ubah Predikat{% else %}Tambah Predikat{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:ekskul_predikat_list' %}">Predikat Ekstrakurikuler</a>
+  <span>/</span>
+  <span>{% if predikat %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if predikat %}Predikat {{ predikat.label }}{% else %}Predikat Baru{% endif %}</h2>
+    <p>Contoh: batas 85 untuk predikat A, 75 untuk B, dan seterusnya.</p>
+  </div>
+</div>
+
+<div style="max-width:680px">
+  <form method="post" id="form-predikat" novalidate>
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Aturan Predikat</h3></div>
+      <div class="panel-body">
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.label.id_for_label }}">Predikat</label>
+            {{ form.label }}{{ form.label.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.batas_min.id_for_label }}">Nilai Minimum</label>
+            {{ form.batas_min }}{{ form.batas_min.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.urutan.id_for_label }}">Urutan</label>
+            {{ form.urutan }}{{ form.urutan.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.deskripsi.id_for_label }}">Keterangan</label>
+            {{ form.deskripsi }}{{ form.deskripsi.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.aktif.id_for_label }}">Status</label>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">{{ form.aktif }} Aktif</label>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:20px">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Predikat</button>
+          <a class="btn" href="{% url 'akademik:ekskul_predikat_list' %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

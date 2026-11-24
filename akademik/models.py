@@ -6,6 +6,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Avg
 from django.utils import timezone
+from django.utils.text import slugify
 
 
 class SchoolProfile(models.Model):
@@ -1495,6 +1496,148 @@ class Extracurricular(models.Model):
 
     def __str__(self):
         return f'{self.nama} - {self.student}'
+
+
+class ExtracurricularPredicate(models.Model):
+    """Aturan predikat ekstrakurikuler berdasarkan nilai."""
+
+    label = models.CharField('Predikat', max_length=5, unique=True)
+    batas_min = models.DecimalField(
+        'Nilai Minimum', max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    deskripsi = models.CharField('Keterangan', max_length=200, blank=True)
+    urutan = models.PositiveSmallIntegerField('Urutan', default=0)
+    aktif = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-batas_min', 'label']
+        verbose_name = 'Predikat Ekstrakurikuler'
+        verbose_name_plural = 'Predikat Ekstrakurikuler'
+
+    def __str__(self):
+        return f'{self.label} (≥ {self.batas_min})'
+
+    @classmethod
+    def untuk_nilai(cls, nilai):
+        if nilai is None:
+            return ''
+        return (
+            cls.objects.filter(aktif=True, batas_min__lte=nilai)
+            .order_by('-batas_min')
+            .values_list('label', flat=True)
+            .first()
+            or ''
+        )
+
+
+class ExtracurricularActivity(models.Model):
+    """Master kegiatan ekstrakurikuler yang dapat dipilih."""
+
+    nama = models.CharField('Nama Ekstrakurikuler', max_length=100)
+    slug = models.SlugField('Slug', max_length=110, unique=True, blank=True)
+    pembina = models.ForeignKey(
+        Teacher, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ekskul_dibina', verbose_name='Pembina',
+    )
+    deskripsi = models.TextField('Deskripsi', blank=True)
+    urutan = models.PositiveSmallIntegerField('Urutan', default=1)
+    aktif = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['urutan', 'nama']
+        verbose_name = 'Kegiatan Ekstrakurikuler'
+        verbose_name_plural = 'Kegiatan Ekstrakurikuler'
+
+    def __str__(self):
+        return self.nama
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            dasar = slugify(self.nama) or 'ekskul'
+            slug = dasar
+            nomor = 2
+            while ExtracurricularActivity.objects.exclude(pk=self.pk).filter(slug=slug).exists():
+                slug = f'{dasar}-{nomor}'
+                nomor += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+
+class ExtracurricularEnrollment(models.Model):
+    """Nilai siswa pada satu kegiatan ekstrakurikuler."""
+
+    activity = models.ForeignKey(
+        ExtracurricularActivity, on_delete=models.PROTECT,
+        related_name='enrollments', verbose_name='Kegiatan',
+    )
+    student = models.ForeignKey(
+        Student, on_delete=models.CASCADE, related_name='ekskul_enrollments',
+        verbose_name='Peserta Didik',
+    )
+    semester = models.ForeignKey(
+        Semester, on_delete=models.CASCADE, related_name='ekskul_enrollments',
+        verbose_name='Semester',
+    )
+    academic_year = models.ForeignKey(
+        AcademicYear, on_delete=models.CASCADE, related_name='ekskul_enrollments',
+        verbose_name='Tahun Pelajaran',
+    )
+    nilai = models.DecimalField(
+        'Nilai', max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    predikat = models.CharField('Predikat', max_length=5, blank=True)
+    deskripsi = models.CharField('Deskripsi', max_length=200, blank=True)
+    guru = models.ForeignKey(
+        Teacher, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ekskul_dinilai', verbose_name='Penilai',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('student', 'activity', 'semester')]
+        ordering = ['activity__urutan', 'student__no_urut']
+        verbose_name = 'Nilai Ekstrakurikuler'
+        verbose_name_plural = 'Nilai Ekstrakurikuler'
+
+    def __str__(self):
+        return f'{self.activity.nama} - {self.student}'
+
+    @property
+    def nama(self):
+        return self.activity.nama
+
+    @property
+    def urutan(self):
+        return self.activity.urutan
+
+    @property
+    def predikat_efektif(self):
+        if self.nilai is not None:
+            return ExtracurricularPredicate.untuk_nilai(self.nilai) or self.predikat
+        return self.predikat
+
+    def clean(self):
+        if self.semester_id and self.academic_year_id:
+            if self.semester.academic_year_id != self.academic_year_id:
+                raise ValidationError(
+                    {'academic_year': 'Tahun pelajaran harus sama dengan semester.'}
+                )
+
+    def save(self, *args, **kwargs):
+        if self.semester_id:
+            self.academic_year = self.semester.academic_year
+        if self.nilai is not None:
+            self.predikat = ExtracurricularPredicate.untuk_nilai(self.nilai)
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {'predikat'}
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 class AuditLog(models.Model):

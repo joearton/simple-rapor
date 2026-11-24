@@ -1,0 +1,78 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Ekstrakurikuler{% endblock %}
+{% block topbar %}Ekstrakurikuler{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Kegiatan Ekstrakurikuler</h2>
+    <p>Kelola daftar kegiatan, lalu isi nilai siswa per kegiatan. Predikat dihitung otomatis dari nilai.</p>
+  </div>
+  <div class="actions">
+    {% if bisa_kelola %}
+    <a class="btn" href="{% url 'akademik:ekskul_predikat_list' %}"><svg class="icon"><use href="#i-chart"/></svg> Predikat</a>
+    <a class="btn btn-primary" href="{% url 'akademik:ekskul_tambah' %}"><svg class="icon"><use href="#i-plus"/></svg> Tambah Ekskul</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>Daftar Kegiatan</h3>
+    <span class="hint">{{ page_obj.paginator.count }} kegiatan &middot; {{ kelas.nama_lengkap|default:"-" }}</span>
+  </div>
+  <form class="filter-bar" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari kegiatan...">
+    <select class="form-input" name="status">
+      <option value="">Semua status</option>
+      <option value="aktif" {% if status_filter == 'aktif' %}selected{% endif %}>Aktif</option>
+      <option value="arsip" {% if status_filter == 'arsip' %}selected{% endif %}>Arsip</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th class="num" style="width:60px">No</th>
+          <th>Kegiatan</th>
+          <th>Pembina</th>
+          <th class="num" style="width:130px">Nilai Terisi</th>
+          <th class="num" style="width:90px">Status</th>
+          <th style="width:260px">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for kegiatan in rows %}
+        <tr>
+          <td class="num">{{ forloop.counter }}</td>
+          <td>
+            <strong>{{ kegiatan.nama }}</strong>
+            {% if kegiatan.deskripsi %}<span class="sub">{{ kegiatan.deskripsi|truncatechars:90 }}</span>{% endif %}
+          </td>
+          <td>{{ kegiatan.pembina.nama|default:"-" }}</td>
+          <td class="num">{{ kegiatan.jumlah_nilai }} siswa</td>
+          <td class="num">{% if kegiatan.aktif %}<span class="badge badge-green">Aktif</span>{% else %}<span class="badge badge-gray">Arsip</span>{% endif %}</td>
+          <td>
+            <div class="table-actions">
+              <a class="btn btn-sm btn-primary" href="{% url 'akademik:ekskul_nilai' kegiatan.slug %}">Isi Nilai</a>
+              {% if bisa_kelola %}
+              <a class="btn btn-sm btn-icon" href="{% url 'akademik:ekskul_ubah' kegiatan.id %}" title="Ubah kegiatan" aria-label="Ubah kegiatan"><svg class="icon"><use href="#i-edit"/></svg></a>
+              <form method="post" action="{% url 'akademik:ekskul_hapus' kegiatan.id %}" class="inline-form" onsubmit="return confirm('Hapus/arsipkan {{ kegiatan.nama|escapejs }}?');">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-danger btn-icon" type="submit" title="Hapus/arsipkan" aria-label="Hapus/arsipkan"><svg class="icon"><use href="#i-trash"/></svg></button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="empty"><strong>Belum ada kegiatan</strong>Tambahkan kegiatan ekstrakurikuler terlebih dahulu.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'akademik/_pagination.html' %}
+</div>
+{% endblock %}

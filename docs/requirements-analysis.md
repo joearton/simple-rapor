@@ -75,7 +75,7 @@ Sudah tersedia:
 - Tahun pelajaran/semester/kelas, mapel per tahun, guru, siswa, penugasan.
 - Tugas pembelajaran (model `LearningObjective` diperluas), evaluasi formatif/sumatif (rencana), grid nilai formatif/sumatif, leger, rapor dan sampul, catatan/ekskul terikat tahun.
 - Import/export Excel, pengaturan identitas/logo/tata letak rapor, filter/paginasi.
-- 104 test lulus.
+- 108 test lulus.
 
 Pembaruan Tahap 1–7 (24 Nov 2026):
 - Peran Super Admin/Kepala Sekolah/Operator/Guru/Wali + audit log + dashboard per peran.
@@ -84,6 +84,7 @@ Pembaruan Tahap 1–7 (24 Nov 2026):
 - CP, materi, tugas pembelajaran, dan pengumpulan tugas tersedia beserta tab, filter, pagination, dan import/export.
 - Asesmen generik (`Assessment`/`Component`/`Result`), konfigurasi bobot & pembulatan, grid autosave, serta deskripsi TP dengan ambang konfigurabel.
 - Snapshot rapor, alur review/approval/publikasi dengan penguncian, PDF WeasyPrint, dan cetak massal per kelas.
+- Ekstrakurikuler memakai master kegiatan, nilai per kegiatan, dan predikat otomatis dari ambang nilai yang dapat dikelola.
 - Portal siswa/orang tua hanya menampilkan rapor terbit; perintah backup/restore SQLite dan panduan deployment tersedia.
 
 Kesenjangan utama terhadap target:

@@ -6,6 +6,7 @@ from django.utils import timezone
 from .audit import catat_audit
 from .models import (
     Extracurricular,
+    ExtracurricularEnrollment,
     HomeroomNote,
     ReportCard,
     ReportCompetencyDescription,
@@ -138,16 +139,29 @@ def susun_report_card(student, semester, user=None):
     card.alpa = note.alpa if note else 0
 
     card.ekskul.all().delete()
-    for eks in Extracurricular.objects.filter(
+    enrollments = ExtracurricularEnrollment.objects.filter(
         student=student, semester=semester
-    ).order_by('urutan'):
-        ReportExtracurricular.objects.create(
-            report_card=card,
-            urutan=eks.urutan,
-            nama=eks.nama,
-            predikat=eks.predikat,
-            deskripsi=eks.deskripsi,
-        )
+    ).select_related('activity')
+    if enrollments.exists():
+        for eks in enrollments.order_by('activity__urutan', 'activity__nama'):
+            ReportExtracurricular.objects.create(
+                report_card=card,
+                urutan=eks.activity.urutan,
+                nama=eks.activity.nama,
+                predikat=eks.predikat_efektif,
+                deskripsi=eks.deskripsi or eks.activity.deskripsi,
+            )
+    else:
+        for eks in Extracurricular.objects.filter(
+            student=student, semester=semester
+        ).order_by('urutan'):
+            ReportExtracurricular.objects.create(
+                report_card=card,
+                urutan=eks.urutan,
+                nama=eks.nama,
+                predikat=eks.predikat,
+                deskripsi=eks.deskripsi,
+            )
     card.save()
     catat_audit(
         user, 'UPDATE', card,

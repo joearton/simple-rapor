@@ -1,0 +1,116 @@
+{% extends 'akademik/base.html' %}
+{% load l10n %}
+{% block title %}Nilai {{ activity.nama }}{% endblock %}
+{% block topbar %}Nilai Ekstrakurikuler{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:ekskul_list' %}">Ekstrakurikuler</a>
+  <span>/</span>
+  <span>{{ activity.nama }}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{{ activity.nama }}</h2>
+    <p>Kelas {{ kelas.nama_lengkap|default:"-" }} &middot; Semester {{ semester.nama|default:"-" }} {{ semester.academic_year.tahun|default:"" }}
+      {% if guru %}&middot; Penilai: <strong>{{ guru.nama }}</strong>{% endif %}</p>
+  </div>
+  <div class="actions">
+    {% if is_admin_sekolah %}
+    <a class="btn" href="{% url 'akademik:ekskul_predikat_list' %}"><svg class="icon"><use href="#i-chart"/></svg> Atur Predikat</a>
+    {% endif %}
+    <a class="btn" href="{% url 'akademik:ekskul_list' %}"><svg class="icon"><use href="#i-back"/></svg> Daftar Ekskul</a>
+  </div>
+</div>
+
+{% if activity.deskripsi %}
+<div class="note-box" style="margin-bottom:14px">{{ activity.deskripsi }}</div>
+{% endif %}
+
+<div class="panel">
+  <div class="toolbar">
+    <div class="legend">
+      {% for p in predikat_list %}<span><b>{{ p.label }}</b> ≥ {{ p.batas_min|unlocalize|floatformat:'-2' }}</span>{% empty %}<span>Predikat belum diatur.</span>{% endfor %}
+    </div>
+    <span class="hint">{{ page_obj.paginator.count }} siswa</span>
+  </div>
+  <form class="filter-bar" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    <select class="form-input" name="status">
+      <option value="">Semua siswa</option>
+      <option value="sudah" {% if status_filter == 'sudah' %}selected{% endif %}>Sudah dinilai</option>
+      <option value="belum" {% if status_filter == 'belum' %}selected{% endif %}>Belum dinilai</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+
+  <form method="post" action="{% querystring %}" id="form-ekskul-nilai">
+    {% csrf_token %}
+    <div class="table-wrap">
+      <table class="data" id="table-ekskul-nilai">
+        <thead>
+          <tr>
+            <th class="num" style="width:48px">No</th>
+            <th style="min-width:190px">Nama Siswa</th>
+            <th class="num" style="width:110px">Nilai</th>
+            <th class="num" style="width:90px">Predikat</th>
+            <th style="min-width:240px">Deskripsi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="num">{{ forloop.counter }}</td>
+            <td class="nama">{{ row.siswa.nama }}<span class="sub">{{ row.siswa.nis|default:"-" }}</span></td>
+            <td class="num">
+              <input class="cell-input nilai-ekskul" type="number" min="0" max="100" step="0.01"
+                     inputmode="decimal" name="nilai_{{ row.siswa.id }}"
+                     value="{{ row.nilai.nilai|unlocalize|floatformat:'-2'|default_if_none:'' }}"
+                     data-predikat-target="predikat-{{ row.siswa.id }}">
+            </td>
+            <td class="num"><span class="badge badge-green" id="predikat-{{ row.siswa.id }}">{{ row.nilai.predikat|default:"-" }}</span></td>
+            <td><input class="cell-text" type="text" name="desk_{{ row.siswa.id }}"
+                       value="{{ row.nilai.deskripsi|default:'' }}" placeholder="{{ activity.deskripsi|default:'Deskripsi singkat' }}"></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="empty"><strong>Belum ada siswa</strong>Pilih kelas yang memiliki siswa.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'akademik/_pagination.html' %}
+    <div class="panel-body" style="border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="hint">Predikat dihitung otomatis dari nilai. Kosongkan nilai dan deskripsi untuk menghapus.</span>
+      <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Nilai</button>
+    </div>
+  </form>
+</div>
+
+{{ predikat_data|json_script:"predikat-data" }}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const rules = JSON.parse(document.getElementById('predikat-data').textContent)
+    .slice().sort(function (a, b) { return b.min - a.min; });
+  function predikat(nilai) {
+    if (nilai === '' || isNaN(parseFloat(nilai))) return '-';
+    const angka = parseFloat(nilai);
+    for (let i = 0; i < rules.length; i += 1) {
+      if (angka >= rules[i].min) return rules[i].label;
+    }
+    return '-';
+  }
+  document.querySelectorAll('.nilai-ekskul').forEach(function (input) {
+    function perbarui() {
+      const target = document.getElementById(input.dataset.predikatTarget);
+      if (target) target.textContent = predikat(input.value);
+    }
+    input.addEventListener('input', perbarui);
+    perbarui();
+  });
+})();
+</script>
+{% endblock %}

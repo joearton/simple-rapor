@@ -12,6 +12,8 @@ from .models import (
     ClassGroup,
     EvaluasiFormatif,
     EvaluasiSumatif,
+    ExtracurricularActivity,
+    ExtracurricularPredicate,
     Grade,
     GradeConfiguration,
     LearningMaterial,
@@ -785,3 +787,33 @@ class GradeConfigurationForm(forms.ModelForm):
                 'bobot_lm', 'Minimal salah satu bobot LM/STS/SAS harus lebih dari 0.'
             )
         return cleaned
+
+
+class ExtracurricularActivityForm(forms.ModelForm):
+    class Meta:
+        model = ExtracurricularActivity
+        fields = ['nama', 'pembina', 'deskripsi', 'urutan', 'aktif']
+        widgets = {'deskripsi': forms.Textarea(attrs={'rows': 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+        self.fields['pembina'].queryset = Teacher.objects.filter(aktif=True)
+        self.fields['urutan'].required = False
+        self.fields['urutan'].help_text = 'Kosongkan untuk melanjutkan urutan otomatis.'
+
+
+class ExtracurricularPredicateForm(forms.ModelForm):
+    class Meta:
+        model = ExtracurricularPredicate
+        fields = ['label', 'batas_min', 'deskripsi', 'urutan', 'aktif']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+
+    def clean_batas_min(self):
+        nilai = self.cleaned_data.get('batas_min')
+        if nilai is not None and (nilai < 0 or nilai > 100):
+            raise forms.ValidationError('Batas minimum harus 0-100.')
+        return nilai

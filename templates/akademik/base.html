@@ -75,7 +75,7 @@
       {% endif %}
       {% if is_admin_sekolah or is_wali_kelas %}
       <a href="{% url 'akademik:catatan_entry' %}" class="{% if active == 'catatan_entry' %}active{% endif %}"><svg class="icon"><use href="#i-calendar"/></svg> Catatan &amp; Absensi</a>
-      <a href="{% url 'akademik:ekskul_entry' %}" class="{% if active == 'ekskul_entry' %}active{% endif %}"><svg class="icon"><use href="#i-trophy"/></svg> Ekstrakurikuler</a>
+      <a href="{% url 'akademik:ekskul_list' %}" class="{% if active == 'ekskul_list' or active == 'ekskul_nilai' or active == 'ekskul_tambah' or active == 'ekskul_ubah' or active == 'ekskul_predikat_list' or active == 'ekskul_predikat_tambah' or active == 'ekskul_predikat_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-trophy"/></svg> Ekstrakurikuler</a>
       {% endif %}
 
       {% if is_admin_sekolah or is_wali_kelas or is_kepala_sekolah %}

@@ -39,6 +39,8 @@ from .forms import (
     CapaianPembelajaranForm,
     EvaluasiFormatifForm,
     EvaluasiSumatifForm,
+    ExtracurricularActivityForm,
+    ExtracurricularPredicateForm,
     ClassGroupForm,
     GradeConfigurationForm,
     KelasForm,
@@ -66,6 +68,9 @@ from .models import (
     EvaluasiFormatif,
     EvaluasiSumatif,
     Extracurricular,
+    ExtracurricularActivity,
+    ExtracurricularEnrollment,
+    ExtracurricularPredicate,
     FormativeScore,
     GradeConfiguration,
     HomeroomNote,
@@ -734,14 +739,98 @@ def catatan_entry(request):
 
 
 @login_required
-def ekskul_entry(request):
-    kelas = _kelas()
-    if not can_manage_homeroom(request.user, kelas):
-        messages.error(request, 'Data ekstrakurikuler hanya dapat diisi oleh wali kelas atau admin.')
-        return redirect('akademik:dashboard')
+def ekskul_list(request):
+    if not (is_admin(request.user) or is_kepala_sekolah(request.user) or can_manage_homeroom(request.user, _kelas())):
+        return _tolak_halaman(request)
     semester = _semester()
-    slots = range(1, 6)
-    guru = get_teacher(request.user) or (kelas.wali_kelas_guru if kelas else None)
+    kelas = _kelas()
+    admin = is_admin(request.user)
+    q = _q(request)
+    status = request.GET.get('status') or ''
+    activities = ExtracurricularActivity.objects.all()
+    if not admin:
+        activities = activities.filter(aktif=True)
+    if q:
+        activities = activities.filter(Q(nama__icontains=q) | Q(deskripsi__icontains=q))
+    if status == 'aktif':
+        activities = activities.filter(aktif=True)
+    elif status == 'arsip':
+        activities = activities.filter(aktif=False)
+    students = Student.objects.in_class(kelas).filter(aktif=True) if kelas else Student.objects.none()
+    activities = activities.annotate(
+        jumlah_nilai=Count(
+            'enrollments',
+            filter=Q(enrollments__semester=semester, enrollments__student__in=students)
+            if semester else Q(pk__in=[]),
+        )
+    )
+    page_obj = _paginate(request, activities.order_by('urutan', 'nama'))
+    return render(request, 'akademik/ekskul_list.html', {
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'semester': semester,
+        'kelas': kelas,
+        'q': q,
+        'status_filter': status,
+        'bisa_kelola': admin,
+    })
+
+
+@login_required
+@admin_required
+def ekskul_form(request, pk=None):
+    instance = get_object_or_404(ExtracurricularActivity, pk=pk) if pk else None
+    if request.method == 'POST':
+        form = ExtracurricularActivityForm(request.POST, instance=instance)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            if not obj.urutan:
+                obj.urutan = (
+                    ExtracurricularActivity.objects.order_by('-urutan')
+                    .values_list('urutan', flat=True).first()
+                    or 0
+                ) + 1
+            obj.save()
+            messages.success(request, 'Kegiatan ekstrakurikuler disimpan.')
+            return redirect('akademik:ekskul_list')
+    else:
+        form = ExtracurricularActivityForm(instance=instance)
+    return render(request, 'akademik/ekskul_form.html', {
+        'form': form,
+        'ekskul': instance,
+    })
+
+
+@login_required
+@admin_required
+def ekskul_hapus(request, pk):
+    activity = get_object_or_404(ExtracurricularActivity, pk=pk)
+    if request.method == 'POST':
+        if activity.enrollments.exists():
+            activity.aktif = False
+            activity.save(update_fields=['aktif'])
+            messages.success(request, 'Kegiatan memiliki nilai sehingga diarsipkan.')
+        else:
+            activity.delete()
+            messages.success(request, 'Kegiatan ekstrakurikuler dihapus.')
+    return redirect('akademik:ekskul_list')
+
+
+@login_required
+def ekskul_nilai(request, slug):
+    activity = get_object_or_404(ExtracurricularActivity, slug=slug)
+    kelas = _kelas()
+    semester = _semester()
+    guru_login = get_teacher(request.user)
+    boleh = (
+        is_admin(request.user)
+        or is_kepala_sekolah(request.user)
+        or can_manage_homeroom(request.user, kelas)
+        or (guru_login is not None and activity.pembina_id == guru_login.id)
+    )
+    if not boleh:
+        return _tolak_halaman(request)
+    guru = guru_login or (kelas.wali_kelas_guru if kelas else None) or activity.pembina
     q = _q(request)
     status = request.GET.get('status') or ''
     base = (
@@ -751,7 +840,13 @@ def ekskul_entry(request):
     base = _filter_siswa_text(base, q)
     if status in ('sudah', 'belum') and semester:
         base = base.annotate(
-            jml=Count('ekstrakurikuler', filter=Q(ekstrakurikuler__semester=semester))
+            jml=Count(
+                'ekskul_enrollments',
+                filter=Q(
+                    ekskul_enrollments__semester=semester,
+                    ekskul_enrollments__activity=activity,
+                ),
+            )
         )
         base = base.filter(jml__gt=0) if status == 'sudah' else base.filter(jml=0)
     page_obj = _paginate(request, base.order_by('no_urut'))
@@ -761,43 +856,104 @@ def ekskul_entry(request):
         if _kelas_terkunci(kelas, semester):
             messages.error(request, 'Rapor kelas ini sudah terbit dan terkunci.')
             return redirect(request.get_full_path())
+        jumlah = 0
         with transaction.atomic():
             for siswa in students:
-                for urutan in slots:
-                    nama = request.POST.get(f'eks_{siswa.id}_{urutan}', '').strip()
-                    predikat = request.POST.get(f'pred_{siswa.id}_{urutan}', '').strip()
-                    deskripsi = request.POST.get(f'desk_{siswa.id}_{urutan}', '').strip()
-                    if not (nama or predikat or deskripsi):
-                        Extracurricular.objects.filter(
-                            student=siswa, semester=semester, urutan=urutan
-                        ).delete()
-                        continue
-                    Extracurricular.objects.update_or_create(
-                        student=siswa, semester=semester, urutan=urutan,
-                        defaults={
-                            'nama': nama, 'predikat': predikat, 'deskripsi': deskripsi,
-                            'guru': guru, 'academic_year': semester.academic_year,
-                        },
-                    )
-        messages.success(request, 'Data ekstrakurikuler disimpan.')
+                nilai = _angka_bulat(request.POST.get(f'nilai_{siswa.id}'))
+                deskripsi = request.POST.get(f'desk_{siswa.id}', '').strip()
+                if nilai is None and not deskripsi:
+                    ExtracurricularEnrollment.objects.filter(
+                        student=siswa, activity=activity, semester=semester
+                    ).delete()
+                    continue
+                ExtracurricularEnrollment.objects.update_or_create(
+                    student=siswa, activity=activity, semester=semester,
+                    defaults={
+                        'nilai': nilai,
+                        'deskripsi': deskripsi,
+                        'guru': guru,
+                    },
+                )
+                jumlah += 1
+        messages.success(request, f'Nilai {activity.nama} disimpan ({jumlah} siswa).')
         return redirect(request.get_full_path())
 
-    data = {}
-    for eks in Extracurricular.objects.filter(semester=semester, student__in=students):
-        data.setdefault(eks.student_id, {})[eks.urutan] = eks
-    rows = []
-    for siswa in students:
-        isi = data.get(siswa.id, {})
-        rows.append({'siswa': siswa, 'ekskul': [isi.get(i) for i in slots]})
-    return render(request, 'akademik/ekskul_entry.html', {
+    data = {
+        enrollment.student_id: enrollment
+        for enrollment in ExtracurricularEnrollment.objects.filter(
+            activity=activity, semester=semester, student__in=students
+        )
+    }
+    predikat_list = list(ExtracurricularPredicate.objects.filter(aktif=True))
+    rows = [{'siswa': siswa, 'nilai': data.get(siswa.id)} for siswa in students]
+    return render(request, 'akademik/ekskul_nilai.html', {
+        'activity': activity,
         'rows': rows,
-        'slots': slots,
-        'guru': guru,
+        'semester': semester,
         'kelas': kelas,
+        'guru': guru,
         'q': q,
         'status_filter': status,
         'page_obj': page_obj,
+        'predikat_list': predikat_list,
+        'predikat_data': [
+            {'label': p.label, 'min': float(p.batas_min)} for p in predikat_list
+        ],
     })
+
+
+def _sinkron_predikat_ekskul():
+    for enrollment in ExtracurricularEnrollment.objects.exclude(nilai=None):
+        predikat = ExtracurricularPredicate.untuk_nilai(enrollment.nilai)
+        if predikat != enrollment.predikat:
+            ExtracurricularEnrollment.objects.filter(pk=enrollment.pk).update(
+                predikat=predikat
+            )
+
+
+@login_required
+@admin_required
+def ekskul_predikat_list(request):
+    q = _q(request)
+    qs = ExtracurricularPredicate.objects.all()
+    if q:
+        qs = qs.filter(Q(label__icontains=q) | Q(deskripsi__icontains=q))
+    page_obj = _paginate(request, qs)
+    return render(request, 'akademik/ekskul_predikat_list.html', {
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'q': q,
+    })
+
+
+@login_required
+@admin_required
+def ekskul_predikat_form(request, pk=None):
+    instance = get_object_or_404(ExtracurricularPredicate, pk=pk) if pk else None
+    if request.method == 'POST':
+        form = ExtracurricularPredicateForm(request.POST, instance=instance)
+        if form.is_valid():
+            obj = form.save()
+            _sinkron_predikat_ekskul()
+            messages.success(request, f'Predikat {obj.label} disimpan.')
+            return redirect('akademik:ekskul_predikat_list')
+    else:
+        form = ExtracurricularPredicateForm(instance=instance)
+    return render(request, 'akademik/ekskul_predikat_form.html', {
+        'form': form,
+        'predikat': instance,
+    })
+
+
+@login_required
+@admin_required
+def ekskul_predikat_hapus(request, pk):
+    predikat = get_object_or_404(ExtracurricularPredicate, pk=pk)
+    if request.method == 'POST':
+        predikat.delete()
+        _sinkron_predikat_ekskul()
+        messages.success(request, 'Predikat ekstrakurikuler dihapus.')
+    return redirect('akademik:ekskul_predikat_list')
 
 
 @login_required
@@ -1562,7 +1718,7 @@ def tahun_list(request):
             'jumlah_catatan': HomeroomNote.objects.filter(
                 semester__academic_year=tahun
             ).count(),
-            'jumlah_ekskul': Extracurricular.objects.filter(
+            'jumlah_ekskul': ExtracurricularEnrollment.objects.filter(
                 semester__academic_year=tahun
             ).count(),
             'jumlah_eval_formatif': EvaluasiFormatif.objects.filter(
@@ -1774,7 +1930,7 @@ def _kembali_ekspor_impor(kind, subject=None):
     if kind == 'catatan':
         return reverse('akademik:catatan_entry')
     if kind == 'ekskul':
-        return reverse('akademik:ekskul_entry')
+        return reverse('akademik:ekskul_list')
     return reverse('akademik:leger')
 
 

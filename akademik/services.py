@@ -5,6 +5,7 @@ from .models import (
     AssessmentResult,
     ClassGroup,
     Extracurricular,
+    ExtracurricularEnrollment,
     FormativeScore,
     GradeConfiguration,
     HomeroomNote,
@@ -400,8 +401,16 @@ def data_rapor(student, semester):
         })
 
     ekskul = list(
-        Extracurricular.objects.filter(student=student, semester=semester).order_by('urutan')
+        ExtracurricularEnrollment.objects.filter(
+            student=student, semester=semester
+        ).select_related('activity').order_by('activity__urutan', 'activity__nama')
     )
+    if not ekskul:
+        ekskul = list(
+            Extracurricular.objects.filter(
+                student=student, semester=semester
+            ).order_by('urutan')
+        )
     ekskul_rows = (ekskul + [None] * 5)[:5]
     catatan = HomeroomNote.objects.filter(student=student, semester=semester).first()
     return {

@@ -98,7 +98,15 @@ urlpatterns = [
     path('sumatif/<int:subject_id>/nilai/', views.sumatif_entry, name='sumatif_entry'),
 
     path('catatan/', views.catatan_entry, name='catatan_entry'),
-    path('ekskul/', views.ekskul_entry, name='ekskul_entry'),
+    path('ekskul/', views.ekskul_list, name='ekskul_list'),
+    path('ekskul/tambah/', views.ekskul_form, name='ekskul_tambah'),
+    path('ekskul/predikat/', views.ekskul_predikat_list, name='ekskul_predikat_list'),
+    path('ekskul/predikat/tambah/', views.ekskul_predikat_form, name='ekskul_predikat_tambah'),
+    path('ekskul/predikat/<int:pk>/ubah/', views.ekskul_predikat_form, name='ekskul_predikat_ubah'),
+    path('ekskul/predikat/<int:pk>/hapus/', views.ekskul_predikat_hapus, name='ekskul_predikat_hapus'),
+    path('ekskul/<int:pk>/ubah/', views.ekskul_form, name='ekskul_ubah'),
+    path('ekskul/<int:pk>/hapus/', views.ekskul_hapus, name='ekskul_hapus'),
+    path('ekskul/<slug:slug>/', views.ekskul_nilai, name='ekskul_nilai'),
     path('leger/', views.leger, name='leger'),
 
     path('rapor/', views.rapor_index, name='rapor_index'),

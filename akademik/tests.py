@@ -21,6 +21,9 @@ from .models import (
     EvaluasiFormatif,
     EvaluasiSumatif,
     Extracurricular,
+    ExtracurricularActivity,
+    ExtracurricularEnrollment,
+    ExtracurricularPredicate,
     FormativeScore,
     Grade,
     GradeConfiguration,
@@ -221,7 +224,7 @@ class HalamanTest(RaporTestBase):
             reverse('akademik:sumatif_evaluasi_tambah'),
             reverse('akademik:sumatif_entry', args=[self.mapel.id]),
             reverse('akademik:catatan_entry'),
-            reverse('akademik:ekskul_entry'),
+            reverse('akademik:ekskul_list'),
             reverse('akademik:leger'),
             reverse('akademik:rapor_index'),
             reverse('akademik:rapor_detail', args=[self.siswa.id]),
@@ -980,12 +983,22 @@ class TugasEvaluasiCrudTest(RaporTestBase):
         note = HomeroomNote.objects.get(student=self.siswa)
         self.assertEqual(note.academic_year, self.tahun)
 
-        self.client.post(reverse('akademik:ekskul_entry'), {
-            f'eks_{self.siswa.id}_1': 'Basket', f'pred_{self.siswa.id}_1': 'A',
-            f'desk_{self.siswa.id}_1': 'Baik',
+        ExtracurricularPredicate.objects.update_or_create(
+            label='A', defaults={'batas_min': Decimal('85')}
+        )
+        ExtracurricularPredicate.objects.update_or_create(
+            label='B', defaults={'batas_min': Decimal('75')}
+        )
+        kegiatan = ExtracurricularActivity.objects.create(nama='Basket')
+        self.client.post(reverse('akademik:ekskul_nilai', args=[kegiatan.slug]), {
+            f'nilai_{self.siswa.id}': '88',
+            f'desk_{self.siswa.id}': 'Baik',
         })
-        eks = Extracurricular.objects.get(student=self.siswa, urutan=1)
+        eks = ExtracurricularEnrollment.objects.get(
+            student=self.siswa, activity=kegiatan
+        )
         self.assertEqual(eks.academic_year, self.tahun)
+        self.assertEqual(eks.predikat, 'A')
 
 
 class RoleAuditTest(RaporTestBase):
@@ -2043,6 +2056,118 @@ class Tahap6PortalTest(RaporTestBase):
         self.other.refresh_from_db()
         self.assertEqual(self.other.user, user)
         self.assertTrue(user.groups.filter(name='Siswa/Orang Tua').exists())
+
+
+class EkstrakurikulerDinamisTest(RaporTestBase):
+    """Master ekskul, predikat dinamis, dan input nilai per kegiatan."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('admin_ekskul', 'e@uji.id', 'rahasia123')
+        self.client.force_login(self.admin)
+        ExtracurricularPredicate.objects.update_or_create(
+            label='A', defaults={'batas_min': Decimal('85'), 'urutan': 1},
+        )
+        ExtracurricularPredicate.objects.update_or_create(
+            label='B', defaults={'batas_min': Decimal('75'), 'urutan': 2},
+        )
+        ExtracurricularPredicate.objects.update_or_create(
+            label='C', defaults={'batas_min': Decimal('65'), 'urutan': 3},
+        )
+
+    def test_master_dan_predikat_dapat_dikelola(self):
+        response = self.client.post(reverse('akademik:ekskul_tambah'), {
+            'nama': 'Tapak Suci',
+            'pembina': '',
+            'deskripsi': 'Seni bela diri',
+            'urutan': '',
+            'aktif': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        kegiatan = ExtracurricularActivity.objects.get(nama='Tapak Suci')
+        self.assertEqual(kegiatan.slug, 'tapak-suci')
+
+        response = self.client.post(reverse('akademik:ekskul_predikat_tambah'), {
+            'label': 'E', 'batas_min': '50', 'deskripsi': 'Cukup',
+            'urutan': '5', 'aktif': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(ExtracurricularPredicate.objects.filter(label='E', batas_min=50).exists())
+    def test_input_nilai_per_ekskul_dan_predikat_otomatis(self):
+        kegiatan = ExtracurricularActivity.objects.create(nama='Pramuka')
+        url = reverse('akademik:ekskul_nilai', args=[kegiatan.slug])
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+        response = self.client.post(url, {
+            f'nilai_{self.siswa.id}': '85',
+            f'desk_{self.siswa.id}': 'Aktif',
+        })
+        self.assertEqual(response.status_code, 302)
+        enrollment = ExtracurricularEnrollment.objects.get(
+            student=self.siswa, activity=kegiatan, semester=self.semester
+        )
+        self.assertEqual(enrollment.predikat, 'A')
+
+        self.client.post(url, {
+            f'nilai_{self.siswa.id}': '76',
+            f'desk_{self.siswa.id}': 'Baik',
+        })
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.predikat, 'B')
+
+    def test_predikat_lama_disesuaikan_saat_aturan_berubah(self):
+        kegiatan = ExtracurricularActivity.objects.create(nama='Futsal')
+        enrollment = ExtracurricularEnrollment.objects.create(
+            activity=kegiatan,
+            student=self.siswa,
+            semester=self.semester,
+            nilai=Decimal('88'),
+        )
+        self.assertEqual(enrollment.predikat, 'A')
+
+        self.client.post(
+            reverse('akademik:ekskul_predikat_ubah', args=[
+                ExtracurricularPredicate.objects.get(label='A').id
+            ]),
+            {
+                'label': 'A', 'batas_min': '90', 'deskripsi': 'Sangat baik',
+                'urutan': '1', 'aktif': 'on',
+            },
+        )
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.predikat, 'B')
+
+    def test_rapor_memakai_nilai_ekskul_baru(self):
+        kegiatan = ExtracurricularActivity.objects.create(
+            nama='Seni Tari', deskripsi='Tari daerah',
+        )
+        ExtracurricularEnrollment.objects.create(
+            activity=kegiatan,
+            student=self.siswa,
+            semester=self.semester,
+            nilai=Decimal('86'),
+            deskripsi='Percaya diri',
+        )
+        # Snapshot laporan memakai enrollment baru.
+        from .reporting import susun_report_card
+        # Lengkapi nilai mapel supaya rapor bisa disusun.
+        for subject in (self.mapel, self.mapel2):
+            SummativeLM.objects.create(
+                student=self.siswa, subject=subject, semester=self.semester,
+                nomor=1, nilai=Decimal('85'),
+            )
+            SummativeScore.objects.create(
+                student=self.siswa, subject=subject, semester=self.semester,
+                sts=Decimal('80'), sas_non_tes=Decimal('90'), sas_tes=Decimal('90'),
+            )
+        HomeroomNote.objects.create(
+            student=self.siswa, semester=self.semester,
+            academic_year=self.tahun, catatan='Baik',
+        )
+        card = susun_report_card(self.siswa, self.semester, self.admin)
+        eks = card.ekskul.get()
+        self.assertEqual(eks.nama, 'Seni Tari')
+        self.assertEqual(eks.predikat, 'A')
 
 
 class Tahap7HardeningTest(TestCase):

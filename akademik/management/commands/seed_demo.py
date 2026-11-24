@@ -15,6 +15,9 @@ from akademik.models import (
     EvaluasiFormatif,
     EvaluasiSumatif,
     Extracurricular,
+    ExtracurricularActivity,
+    ExtracurricularEnrollment,
+    ExtracurricularPredicate,
     FormativeScore,
     GradeConfiguration,
     HomeroomNote,
@@ -192,6 +195,7 @@ class Command(BaseCommand):
             return
         ReportCard.objects.filter(semester__academic_year=tahun).delete()
         LearningTaskSubmission.objects.filter(task__academic_year=tahun).delete()
+        ExtracurricularEnrollment.objects.filter(academic_year=tahun).delete()
         AssessmentResult.objects.filter(
             component__assessment__academic_year=tahun
         ).delete()
@@ -498,11 +502,28 @@ class Command(BaseCommand):
         HomeroomNote.objects.filter(
             student__in=students, semester=semester
         ).delete()
-        Extracurricular.objects.filter(
+        ExtracurricularEnrollment.objects.filter(
             student__in=students, semester=semester
         ).delete()
+        for label, batas, urutan in (
+            ('A', 85, 1), ('B', 75, 2), ('C', 65, 3), ('D', 0, 4),
+        ):
+            ExtracurricularPredicate.objects.get_or_create(
+                label=label,
+                defaults={
+                    'batas_min': Decimal(str(batas)),
+                    'urutan': urutan,
+                    'aktif': True,
+                },
+            )
+        activities = []
+        for urutan, (nama, _, deskripsi) in enumerate(EKSTRA, start=1):
+            activity, _ = ExtracurricularActivity.objects.get_or_create(
+                nama=nama,
+                defaults={'urutan': urutan, 'deskripsi': deskripsi, 'aktif': True},
+            )
+            activities.append(activity)
         catatan = []
-        ekskul = []
         for index, siswa in enumerate(students):
             catatan.append(HomeroomNote(
                 student=siswa,
@@ -513,16 +534,17 @@ class Command(BaseCommand):
                 izin=rnd.randint(0, 2),
                 alpa=rnd.randint(0, 1),
             ))
-            for urutan in (1, 2):
-                nama, predikat, deskripsi = EKSTRA[(index + urutan) % len(EKSTRA)]
-                ekskul.append(Extracurricular(
+            for slot in (0, 1):
+                activity = activities[(index + slot) % len(activities)]
+                nilai = 78 + ((index * 5 + slot * 7) % 18)
+                ExtracurricularEnrollment.objects.update_or_create(
                     student=siswa,
+                    activity=activity,
                     semester=semester,
-                    academic_year=semester.academic_year,
-                    urutan=urutan,
-                    nama=nama,
-                    predikat=predikat,
-                    deskripsi=deskripsi,
-                ))
+                    defaults={
+                        'nilai': Decimal(str(nilai)),
+                        'deskripsi': activity.deskripsi,
+                        'guru': activity.pembina,
+                    },
+                )
         HomeroomNote.objects.bulk_create(catatan, batch_size=200)
-        Extracurricular.objects.bulk_create(ekskul, batch_size=200)
