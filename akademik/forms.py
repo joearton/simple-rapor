@@ -70,11 +70,18 @@ def _pasang_class(form):
 class LoginForm(AuthenticationForm):
     username = forms.CharField(
         label='Username',
-        widget=forms.TextInput(attrs={'autofocus': True, 'placeholder': 'Masukkan username'}),
+        widget=forms.TextInput(attrs={
+            'autofocus': True,
+            'placeholder': 'Masukkan username',
+            'autocomplete': 'username',
+        }),
     )
     password = forms.CharField(
         label='Password',
-        widget=forms.PasswordInput(attrs={'placeholder': 'Masukkan password'}),
+        widget=forms.PasswordInput(attrs={
+            'placeholder': 'Masukkan password',
+            'autocomplete': 'current-password',
+        }),
     )
     captcha = CaptchaField(label='Kode Captcha', help_text='Masukkan kode pada gambar.')
 
