@@ -1,12 +1,14 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Avg
+from django.utils import timezone
 
 
-class School(models.Model):
+class SchoolProfile(models.Model):
     """Identitas sekolah (data tunggal / singleton)."""
 
     nama = models.CharField(max_length=150, default='SMP MUHAMMADIYAH SOEKARNO HATTA KOTABUMI')
@@ -78,6 +80,7 @@ class School(models.Model):
     class Meta:
         verbose_name = 'Identitas Sekolah'
         verbose_name_plural = 'Identitas Sekolah'
+        db_table = 'akademik_school'
 
     def __str__(self):
         return self.nama
@@ -187,9 +190,34 @@ class Teacher(models.Model):
         return ''.join(b[0] for b in bagian[:2]).upper() or 'G'
 
 
+class Grade(models.Model):
+    """Tingkat kelas (VII/VIII/IX) beserta fasenya."""
+
+    nama = models.CharField('Tingkat', max_length=10, unique=True)
+    fase = models.CharField('Fase', max_length=5, default='D')
+    urutan = models.PositiveSmallIntegerField('Urutan', default=0)
+    aktif = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['urutan', 'nama']
+        verbose_name = 'Tingkat Kelas'
+        verbose_name_plural = 'Tingkat Kelas'
+
+    def __str__(self):
+        return self.nama
+
+
 class ClassGroup(models.Model):
     academic_year = models.ForeignKey(
         AcademicYear, on_delete=models.CASCADE, related_name='kelas_list'
+    )
+    grade = models.ForeignKey(
+        Grade,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='kelas_list',
+        verbose_name='Tingkat',
     )
     tingkat = models.CharField('Tingkat', max_length=10, default='VII')
     nama = models.CharField('Nama Kelas', max_length=50, default='Al-Lathif')
@@ -214,6 +242,32 @@ class ClassGroup(models.Model):
 
     def __str__(self):
         return f'{self.tingkat} {self.nama}'
+
+    def save(self, *args, **kwargs):
+        """Jaga agar `grade` dan `tingkat` tetap sinkron (transisi skema)."""
+        update_fields = kwargs.get('update_fields')
+        berubah = set()
+        if self.grade_id:
+            grade = self.grade
+            if self.tingkat != grade.nama:
+                self.tingkat = grade.nama
+                berubah.add('tingkat')
+            if not self.fase:
+                self.fase = grade.fase
+                berubah.add('fase')
+        elif self.tingkat:
+            default_fase = self.fase or 'D'
+            urutan = {'VII': 1, 'VIII': 2, 'IX': 3}.get(self.tingkat, 0)
+            grade, _ = Grade.objects.get_or_create(
+                nama=self.tingkat,
+                defaults={'fase': default_fase, 'urutan': urutan},
+            )
+            self.grade = grade
+            berubah.add('grade')
+        if update_fields is not None and berubah:
+            kwargs['update_fields'] = set(update_fields) | berubah
+        super().save(*args, **kwargs)
+
 
     @property
     def nama_lengkap(self):
@@ -256,7 +310,11 @@ class Subject(models.Model):
 
 
 class TeachingAssignment(models.Model):
-    """Pembagian tugas mengajar: guru pengampu tiap mapel per kelas/tahun."""
+    """Pembagian tugas mengajar: guru pengampu tiap mapel per kelas/tahun.
+
+    `semester` kosong berarti penugasan berlaku untuk seluruh tahun pelajaran
+    (perilaku lama). Bila diisi, penugasan berlaku khusus semester tersebut.
+    """
 
     teacher = models.ForeignKey(
         Teacher, on_delete=models.CASCADE, related_name='penugasan', verbose_name='Guru'
@@ -271,21 +329,97 @@ class TeachingAssignment(models.Model):
         AcademicYear, on_delete=models.CASCADE, related_name='penugasan',
         verbose_name='Tahun Pelajaran',
     )
+    semester = models.ForeignKey(
+        Semester, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='penugasan', verbose_name='Semester',
+    )
 
     class Meta:
-        unique_together = [('class_group', 'subject', 'academic_year')]
         ordering = ['subject__urutan']
         verbose_name = 'Pembagian Mengajar'
         verbose_name_plural = 'Pembagian Mengajar'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['class_group', 'subject', 'academic_year'],
+                condition=models.Q(semester__isnull=True),
+                name='uniq_penugasan_tahun',
+            ),
+            models.UniqueConstraint(
+                fields=['class_group', 'subject', 'semester'],
+                condition=models.Q(semester__isnull=False),
+                name='uniq_penugasan_semester',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.subject.nama} - {self.class_group.nama_lengkap} - {self.teacher.nama}'
+
+    def clean(self):
+        errors = {}
+        tahun = self.academic_year_id
+        if self.class_group_id and self.class_group.academic_year_id != tahun:
+            errors['class_group'] = 'Kelas bukan milik tahun pelajaran yang dipilih.'
+        if self.subject_id and self.subject.academic_year_id != tahun:
+            errors['subject'] = 'Mata pelajaran bukan milik tahun pelajaran yang dipilih.'
+        if self.semester_id and self.semester.academic_year_id != tahun:
+            errors['semester'] = 'Semester bukan milik tahun pelajaran yang dipilih.'
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.academic_year_id is None and self.class_group_id:
+            self.academic_year = self.class_group.academic_year
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+
+class LearningOutcome(models.Model):
+    """Capaian Pembelajaran (CP) per mata pelajaran."""
+
+    subject = models.ForeignKey(
+        Subject, on_delete=models.CASCADE, related_name='capaian_list',
+        verbose_name='Mata Pelajaran',
+    )
+    kode = models.CharField('Kode CP', max_length=30, blank=True)
+    fase = models.CharField('Fase', max_length=5, default='D')
+    deskripsi = models.TextField('Capaian Pembelajaran')
+    urutan = models.PositiveSmallIntegerField('Urutan', default=0)
+    aktif = models.BooleanField('Aktif', default=True)
+
+    class Meta:
+        ordering = ['subject__urutan', 'urutan', 'kode']
+        verbose_name = 'Capaian Pembelajaran'
+        verbose_name_plural = 'Capaian Pembelajaran'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['subject', 'kode'],
+                condition=~models.Q(kode=''),
+                name='uniq_cp_subject_kode',
+            ),
+            models.UniqueConstraint(
+                fields=['subject', 'urutan'],
+                name='uniq_cp_subject_urutan',
+            ),
+        ]
+
+    def __str__(self):
+        label = f'{self.kode} - ' if self.kode else ''
+        return f'{label}{self.subject.nama}'
 
 
 class LearningObjective(models.Model):
     """Tujuan Pembelajaran (TP) per mata pelajaran dan tahun pelajaran."""
 
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='tujuan_list')
+    learning_outcome = models.ForeignKey(
+        LearningOutcome,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tujuan_list',
+        verbose_name='Capaian Pembelajaran',
+    )
     academic_year = models.ForeignKey(
         AcademicYear,
         on_delete=models.CASCADE,
@@ -296,6 +430,7 @@ class LearningObjective(models.Model):
         Teacher, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='tujuan_list', verbose_name='Guru Pengampu',
     )
+    kode = models.CharField('Kode TP', max_length=30, blank=True)
     nomor = models.PositiveSmallIntegerField('Nomor Urut')
     deskripsi = models.TextField('Tujuan Pembelajaran')
     aktif = models.BooleanField('Aktif', default=True)
@@ -306,8 +441,181 @@ class LearningObjective(models.Model):
         verbose_name = 'Tujuan Pembelajaran'
         verbose_name_plural = 'Tujuan Pembelajaran'
 
+    def clean(self):
+        if self.learning_outcome_id and self.subject_id:
+            if self.learning_outcome.subject_id != self.subject_id:
+                raise ValidationError(
+                    {'learning_outcome': 'CP harus berasal dari mata pelajaran yang sama.'}
+                )
+
     def __str__(self):
         return f'TP {self.nomor} - {self.subject.nama} ({self.academic_year.tahun})'
+
+
+class LearningMaterial(models.Model):
+    """Materi pembelajaran yang dapat mencakup beberapa TP."""
+
+    subject = models.ForeignKey(
+        Subject, on_delete=models.CASCADE, related_name='materi_list',
+        verbose_name='Mata Pelajaran',
+    )
+    objectives = models.ManyToManyField(
+        LearningObjective, blank=True, related_name='materi_list',
+        verbose_name='Tujuan Pembelajaran',
+    )
+    kode = models.CharField('Kode Materi', max_length=30, blank=True)
+    judul = models.CharField('Judul Materi', max_length=200)
+    deskripsi = models.TextField('Deskripsi', blank=True)
+    urutan = models.PositiveSmallIntegerField('Urutan', default=0)
+    aktif = models.BooleanField('Aktif', default=True)
+
+    class Meta:
+        ordering = ['subject__urutan', 'urutan', 'judul']
+        verbose_name = 'Materi Pembelajaran'
+        verbose_name_plural = 'Materi Pembelajaran'
+
+    def __str__(self):
+        return self.judul
+
+
+class LearningTask(models.Model):
+    """Tugas pembelajaran (terpisah dari TP)."""
+
+    STATUS = [
+        ('DRAF', 'Draf'),
+        ('TERBIT', 'Terbit'),
+        ('TUTUP', 'Ditutup'),
+    ]
+
+    subject = models.ForeignKey(
+        Subject, on_delete=models.CASCADE, related_name='tugas_pembelajaran',
+        verbose_name='Mata Pelajaran',
+    )
+    academic_year = models.ForeignKey(
+        AcademicYear, on_delete=models.CASCADE, related_name='tugas_pembelajaran',
+        verbose_name='Tahun Pelajaran',
+    )
+    class_groups = models.ManyToManyField(
+        ClassGroup, blank=True, related_name='tugas_pembelajaran',
+        verbose_name='Kelas',
+    )
+    objectives = models.ManyToManyField(
+        LearningObjective, blank=True, related_name='tugas_pembelajaran',
+        verbose_name='Tujuan Pembelajaran',
+    )
+    created_by = models.ForeignKey(
+        Teacher, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tugas_dibuat', verbose_name='Dibuat Oleh',
+    )
+    judul = models.CharField('Judul Tugas', max_length=200)
+    deskripsi = models.TextField('Deskripsi', blank=True)
+    instruksi = models.TextField('Instruksi', blank=True)
+    tanggal_pemberian = models.DateField('Tanggal Pemberian', null=True, blank=True)
+    batas_pengumpulan = models.DateField('Batas Pengumpulan', null=True, blank=True)
+    lampiran = models.FileField(
+        'Lampiran', upload_to='tugas/%Y/%m/', blank=True, null=True,
+    )
+    bobot = models.DecimalField('Bobot (%)', max_digits=5, decimal_places=2, default=0)
+    status = models.CharField(max_length=10, choices=STATUS, default='DRAF')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-tanggal_pemberian', '-created_at', 'judul']
+        verbose_name = 'Tugas Pembelajaran'
+        verbose_name_plural = 'Tugas Pembelajaran'
+
+    def __str__(self):
+        return self.judul
+
+    def clean(self):
+        errors = {}
+        if self.academic_year_id and self.subject_id:
+            if self.subject.academic_year_id != self.academic_year_id:
+                errors['academic_year'] = (
+                    'Tahun pelajaran harus sama dengan tahun pelajaran mapel.'
+                )
+        if (
+            self.tanggal_pemberian
+            and self.batas_pengumpulan
+            and self.batas_pengumpulan < self.tanggal_pemberian
+        ):
+            errors['batas_pengumpulan'] = (
+                'Batas pengumpulan tidak boleh sebelum tanggal pemberian.'
+            )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.academic_year_id is None and self.subject_id:
+            self.academic_year = self.subject.academic_year
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class LearningTaskSubmission(models.Model):
+    """Pengumpulan dan penilaian tugas per siswa."""
+
+    STATUS = [
+        ('BELUM', 'Belum Dikumpulkan'),
+        ('TERKUMPUL', 'Terkumpul'),
+        ('TERLAMBAT', 'Terlambat'),
+        ('DINILAI', 'Dinilai'),
+    ]
+
+    task = models.ForeignKey(
+        LearningTask, on_delete=models.CASCADE, related_name='submissions',
+        verbose_name='Tugas',
+    )
+    student = models.ForeignKey(
+        'Student', on_delete=models.CASCADE, related_name='pengumpulan_tugas',
+        verbose_name='Peserta Didik',
+    )
+    file = models.FileField(
+        'Berkas', upload_to='pengumpulan/%Y/%m/', blank=True, null=True,
+    )
+    catatan_siswa = models.TextField('Catatan Siswa', blank=True)
+    submitted_at = models.DateTimeField('Waktu Kumpul', null=True, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS, default='BELUM')
+    nilai = models.DecimalField(
+        'Nilai', max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    catatan_guru = models.TextField('Catatan Guru', blank=True)
+    dinilai_oleh = models.ForeignKey(
+        Teacher, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='penilaian_tugas', verbose_name='Dinilai Oleh',
+    )
+    dinilai_at = models.DateTimeField('Waktu Dinilai', null=True, blank=True)
+
+    class Meta:
+        unique_together = [('task', 'student')]
+        ordering = ['student__no_urut']
+        verbose_name = 'Pengumpulan Tugas'
+        verbose_name_plural = 'Pengumpulan Tugas'
+
+    def __str__(self):
+        return f'{self.task.judul} - {self.student.nama}'
+
+    def clean(self):
+        if self.task_id and self.student_id:
+            tahun_tugas = self.task.academic_year_id
+            punya_enrollment = self.student.enrollments.filter(
+                academic_year_id=tahun_tugas
+            ).exists()
+            if not punya_enrollment:
+                raise ValidationError(
+                    {'student': 'Siswa tidak terdaftar pada tahun pelajaran tugas.'}
+                )
+
+    def save(self, *args, **kwargs):
+        if self.status in ('TERKUMPUL', 'TERLAMBAT', 'DINILAI') and self.submitted_at is None:
+            self.submitted_at = timezone.now()
+        if self.status == 'DINILAI' and self.dinilai_at is None:
+            self.dinilai_at = timezone.now()
+        self.full_clean()
+        super().save(*args, **kwargs)
+
 
 
 class EvaluasiFormatif(models.Model):
@@ -372,8 +680,21 @@ class EvaluasiSumatif(models.Model):
         return f'{self.nama} - {self.subject.nama}'
 
 
+class StudentQuerySet(models.QuerySet):
+    def in_class(self, class_group):
+        """Siswa yang terdaftar pada kelas tersebut (berdasarkan riwayat enrollment)."""
+        if class_group is None:
+            return self.none()
+        return self.filter(
+            enrollments__class_group=class_group,
+            enrollments__academic_year=class_group.academic_year,
+        ).distinct()
+
+
 class Student(models.Model):
     JENIS_KELAMIN = [('L', 'Laki-Laki'), ('P', 'Perempuan')]
+
+    objects = StudentQuerySet.as_manager()
 
     class_group = models.ForeignKey(
         ClassGroup, on_delete=models.CASCADE, related_name='siswa_list'
@@ -408,6 +729,368 @@ class Student(models.Model):
     def jk_label(self):
         return 'Laki-Laki' if self.jenis_kelamin == 'L' else 'Perempuan'
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Catat/rapikan penempatan kelas pada tahun pelajaran kelas saat ini.
+        # Riwayat tahun sebelumnya tidak disentuh.
+        if self.class_group_id:
+            StudentEnrollment.objects.update_or_create(
+                student=self,
+                academic_year=self.class_group.academic_year,
+                defaults={'class_group': self.class_group},
+            )
+
+    def enrollment_for(self, academic_year):
+        if academic_year is None:
+            return None
+        return (
+            self.enrollments.select_related('class_group')
+            .filter(academic_year=academic_year)
+            .first()
+        )
+
+
+class StudentEnrollment(models.Model):
+    """Riwayat penempatan siswa pada kelas per tahun pelajaran."""
+
+    STATUS = [
+        ('AKTIF', 'Aktif'),
+        ('PINDAH', 'Pindah'),
+        ('LULUS', 'Lulus'),
+        ('KELUAR', 'Keluar'),
+    ]
+
+    student = models.ForeignKey(
+        Student, on_delete=models.CASCADE, related_name='enrollments',
+        verbose_name='Peserta Didik',
+    )
+    class_group = models.ForeignKey(
+        ClassGroup, on_delete=models.PROTECT, related_name='enrollments',
+        verbose_name='Kelas',
+    )
+    academic_year = models.ForeignKey(
+        AcademicYear, on_delete=models.PROTECT, related_name='enrollments',
+        verbose_name='Tahun Pelajaran',
+    )
+    tanggal_masuk = models.DateField('Tanggal Masuk', null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default='AKTIF')
+    keterangan = models.TextField('Keterangan', blank=True)
+
+    class Meta:
+        unique_together = [('student', 'academic_year')]
+        ordering = ['-academic_year__tahun', 'class_group__tingkat', 'class_group__nama']
+        verbose_name = 'Penempatan Kelas'
+        verbose_name_plural = 'Riwayat Penempatan Kelas'
+
+    def __str__(self):
+        return f'{self.student} - {self.class_group.nama_lengkap} ({self.academic_year.tahun})'
+
+    def clean(self):
+        errors = {}
+        if self.class_group_id and self.academic_year_id:
+            if self.class_group.academic_year_id != self.academic_year_id:
+                errors['academic_year'] = (
+                    'Tahun pelajaran harus sama dengan tahun pelajaran kelas.'
+                )
+        if self.status in ('LULUS', 'PINDAH') and not self.academic_year_id:
+            errors['academic_year'] = 'Tahun pelajaran wajib diisi.'
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.academic_year_id is None and self.class_group_id:
+            self.academic_year = self.class_group.academic_year
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+
+class GradeConfiguration(models.Model):
+    """Konfigurasi bobot, pembulatan, dan ambang deskripsi nilai."""
+
+    METODE_PEMBULATAN = [
+        ('HALF_UP', 'Bulatkan biasa (0,5 ke atas)'),
+        ('HALF_DOWN', 'Bulatkan 0,5 ke bawah'),
+        ('UP', 'Selalu ke atas'),
+        ('DOWN', 'Selalu ke bawah'),
+    ]
+
+    academic_year = models.ForeignKey(
+        AcademicYear, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='konfigurasi_nilai', verbose_name='Tahun Pelajaran',
+    )
+    subject = models.ForeignKey(
+        Subject, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='konfigurasi_nilai', verbose_name='Mata Pelajaran',
+    )
+    bobot_lm = models.DecimalField('Bobot Rata-rata LM', max_digits=5, decimal_places=2, default=1)
+    bobot_sts = models.DecimalField('Bobot STS', max_digits=5, decimal_places=2, default=1)
+    bobot_sas = models.DecimalField('Bobot Rata-rata SAS', max_digits=5, decimal_places=2, default=1)
+    bobot_sas_non_tes = models.DecimalField(
+        'Bobot SAS Non Tes', max_digits=5, decimal_places=2, default=1
+    )
+    bobot_sas_tes = models.DecimalField(
+        'Bobot SAS Tes', max_digits=5, decimal_places=2, default=1
+    )
+    metode_pembulatan = models.CharField(
+        max_length=10, choices=METODE_PEMBULATAN, default='HALF_UP'
+    )
+    jumlah_desimal = models.PositiveSmallIntegerField('Jumlah Desimal', default=2)
+    nilai_min = models.DecimalField('Nilai Minimum', max_digits=5, decimal_places=2, default=0)
+    nilai_max = models.DecimalField('Nilai Maksimum', max_digits=5, decimal_places=2, default=100)
+    ambang_unggul = models.PositiveSmallIntegerField('Ambang Unggul', default=3)
+    ambang_perlu_bimbingan = models.PositiveSmallIntegerField(
+        'Ambang Perlu Bimbingan', default=2
+    )
+    aktif = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-academic_year__tahun', 'subject__urutan']
+        verbose_name = 'Konfigurasi Nilai'
+        verbose_name_plural = 'Konfigurasi Nilai'
+
+    def __str__(self):
+        bagian = [str(self.academic_year or 'Semua tahun')]
+        bagian.append(str(self.subject or 'Semua mapel'))
+        return ' - '.join(bagian)
+
+    @classmethod
+    def get_config(cls, subject=None, academic_year=None):
+        tahun = academic_year or (subject.academic_year if subject else None)
+        qs = cls.objects.filter(aktif=True)
+        if subject is not None:
+            konfigurasi = qs.filter(subject=subject, academic_year=tahun).first()
+            if konfigurasi is None:
+                konfigurasi = qs.filter(
+                    subject=subject, academic_year__isnull=True
+                ).first()
+            if konfigurasi is not None:
+                return konfigurasi
+        if tahun is not None:
+            konfigurasi = qs.filter(
+                subject__isnull=True, academic_year=tahun
+            ).first()
+            if konfigurasi is not None:
+                return konfigurasi
+        konfigurasi = qs.filter(subject__isnull=True, academic_year__isnull=True).first()
+        if konfigurasi is None:
+            konfigurasi = cls.objects.create()
+        return konfigurasi
+
+
+class Assessment(models.Model):
+    """Asesmen generik: formatif, sumatif LM, STS, atau SAS."""
+
+    KATEGORI = [
+        ('FORMATIF', 'Formatif'),
+        ('SUMATIF_LM', 'Sumatif Lingkup Materi'),
+        ('STS', 'Sumatif Tengah Semester'),
+        ('SAS', 'Sumatif Akhir Semester'),
+    ]
+    METODE = [
+        ('TES', 'Tes'),
+        ('NON_TES', 'Non Tes'),
+        ('OBSERVASI', 'Observasi'),
+        ('PRAKTIK', 'Praktik'),
+        ('PROYEK', 'Proyek'),
+        ('PORTOFOLIO', 'Portofolio'),
+        ('LAIN', 'Lainnya'),
+    ]
+    STATUS = [
+        ('DRAF', 'Draf'),
+        ('TERBIT', 'Terbit'),
+        ('TUTUP', 'Ditutup'),
+    ]
+
+    subject = models.ForeignKey(
+        Subject, on_delete=models.CASCADE, related_name='asesmen',
+        verbose_name='Mata Pelajaran',
+    )
+    academic_year = models.ForeignKey(
+        AcademicYear, on_delete=models.CASCADE, related_name='asesmen',
+        verbose_name='Tahun Pelajaran',
+    )
+    semester = models.ForeignKey(
+        Semester, on_delete=models.CASCADE, related_name='asesmen',
+        verbose_name='Semester',
+    )
+    class_group = models.ForeignKey(
+        ClassGroup, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='asesmen', verbose_name='Kelas',
+    )
+    nomor = models.PositiveSmallIntegerField('Nomor', null=True, blank=True)
+    nama = models.CharField('Nama Asesmen', max_length=150)
+    kategori = models.CharField(max_length=15, choices=KATEGORI, default='FORMATIF')
+    metode = models.CharField(max_length=15, choices=METODE, default='TES')
+    tanggal = models.DateField('Tanggal', null=True, blank=True)
+    bobot = models.DecimalField('Bobot (%)', max_digits=5, decimal_places=2, default=100)
+    deskripsi = models.TextField('Deskripsi', blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default='DRAF')
+    created_by = models.ForeignKey(
+        Teacher, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='asesmen_dibuat', verbose_name='Dibuat Oleh',
+    )
+    aktif = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['subject__urutan', 'kategori', 'nomor', 'nama']
+        verbose_name = 'Asesmen'
+        verbose_name_plural = 'Asesmen'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['subject', 'semester', 'kategori', 'nama'],
+                name='uniq_asesmen_mapel_semester_nama',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.nama} - {self.subject.nama} ({self.semester})'
+
+    def clean(self):
+        errors = {}
+        if self.subject_id and self.academic_year_id:
+            if self.subject.academic_year_id != self.academic_year_id:
+                errors['academic_year'] = 'Tahun pelajaran harus sama dengan mapel.'
+        if self.semester_id and self.academic_year_id:
+            if self.semester.academic_year_id != self.academic_year_id:
+                errors['semester'] = 'Semester bukan milik tahun pelajaran ini.'
+        if self.class_group_id and self.academic_year_id:
+            if self.class_group.academic_year_id != self.academic_year_id:
+                errors['class_group'] = 'Kelas bukan milik tahun pelajaran ini.'
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.academic_year_id is None and self.subject_id:
+            self.academic_year = self.subject.academic_year
+        if self.semester_id and self.academic_year_id is None:
+            self.academic_year = self.semester.academic_year
+        super().save(*args, **kwargs)
+
+
+class AssessmentComponent(models.Model):
+    """Komponen nilai di dalam satu asesmen."""
+
+    TIPE = [
+        ('NILAI', 'Nilai'),
+        ('TES', 'Tes'),
+        ('NON_TES', 'Non Tes'),
+        ('TUGAS', 'Tugas'),
+        ('PRAKTIK', 'Praktik'),
+        ('OBSERVASI', 'Observasi'),
+        ('LAIN', 'Lainnya'),
+    ]
+
+    assessment = models.ForeignKey(
+        Assessment, on_delete=models.CASCADE, related_name='components',
+        verbose_name='Asesmen',
+    )
+    nama = models.CharField('Nama Komponen', max_length=100)
+    tipe = models.CharField(max_length=15, choices=TIPE, default='NILAI')
+    urutan = models.PositiveSmallIntegerField('Urutan', default=1)
+    bobot = models.DecimalField('Bobot', max_digits=5, decimal_places=2, default=100)
+    nilai_maksimal = models.DecimalField(
+        'Nilai Maksimal', max_digits=5, decimal_places=2, default=100
+    )
+    wajib = models.BooleanField('Wajib', default=True)
+
+    class Meta:
+        unique_together = [('assessment', 'nama')]
+        ordering = ['urutan', 'nama']
+        verbose_name = 'Komponen Asesmen'
+        verbose_name_plural = 'Komponen Asesmen'
+
+    def __str__(self):
+        return f'{self.assessment.nama} - {self.nama}'
+
+
+class AssessmentObjective(models.Model):
+    """Kaitan asesmen dengan TP (untuk deskripsi capaian)."""
+
+    assessment = models.ForeignKey(
+        Assessment, on_delete=models.CASCADE, related_name='objective_links',
+        verbose_name='Asesmen',
+    )
+    objective = models.ForeignKey(
+        LearningObjective, on_delete=models.CASCADE, related_name='assessment_links',
+        verbose_name='Tujuan Pembelajaran',
+    )
+    bobot = models.DecimalField('Bobot', max_digits=5, decimal_places=2, default=1)
+
+    class Meta:
+        unique_together = [('assessment', 'objective')]
+        verbose_name = 'TP Asesmen'
+        verbose_name_plural = 'TP Asesmen'
+
+    def __str__(self):
+        return f'{self.assessment.nama} - TP {self.objective.nomor}'
+
+
+class AssessmentResult(models.Model):
+    """Nilai satu siswa pada satu komponen asesmen."""
+
+    STATUS = [('VALID', 'Valid'), ('REVISI', 'Perlu Revisi')]
+
+    component = models.ForeignKey(
+        AssessmentComponent, on_delete=models.CASCADE, related_name='results',
+        verbose_name='Komponen',
+    )
+    student = models.ForeignKey(
+        Student, on_delete=models.CASCADE, related_name='hasil_asesmen',
+        verbose_name='Peserta Didik',
+    )
+    nilai = models.DecimalField('Nilai', max_digits=8, decimal_places=2, null=True, blank=True)
+    predikat = models.CharField('Predikat', max_length=5, blank=True)
+    catatan = models.TextField('Catatan', blank=True)
+    tanggal = models.DateField('Tanggal', null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default='VALID')
+    dinilai_oleh = models.ForeignKey(
+        Teacher, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='hasil_dinilai', verbose_name='Dinilai Oleh',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('component', 'student')]
+        ordering = ['student__no_urut']
+        verbose_name = 'Hasil Asesmen'
+        verbose_name_plural = 'Hasil Asesmen'
+
+    def __str__(self):
+        return f'{self.component} - {self.student} = {self.nilai}'
+
+    def clean(self):
+        if self.nilai is not None and self.component_id:
+            if self.nilai < 0 or self.nilai > self.component.nilai_maksimal:
+                raise ValidationError(
+                    {'nilai': f'Nilai harus antara 0 dan {self.component.nilai_maksimal}.'}
+                )
+
+
+class AssessmentRubric(models.Model):
+    """Rubrik deskriptif per komponen asesmen."""
+
+    component = models.ForeignKey(
+        AssessmentComponent, on_delete=models.CASCADE, related_name='rubrics',
+        verbose_name='Komponen',
+    )
+    level = models.CharField('Level/Skor', max_length=20)
+    deskripsi = models.TextField('Deskripsi')
+    urutan = models.PositiveSmallIntegerField('Urutan', default=1)
+
+    class Meta:
+        unique_together = [('component', 'level')]
+        ordering = ['urutan', 'level']
+        verbose_name = 'Rubrik Asesmen'
+        verbose_name_plural = 'Rubrik Asesmen'
+
+    def __str__(self):
+        return f'{self.component.nama} - {self.level}'
+
 
 class FormativeScore(models.Model):
     """Nilai asesmen formatif per Tujuan Pembelajaran (skala 1-4)."""
@@ -433,9 +1116,20 @@ class FormativeScore(models.Model):
         verbose_name = 'Nilai Formatif'
         verbose_name_plural = 'Nilai Formatif'
 
+    def clean(self):
+        errors = {}
+        if self.semester_id and self.objective_id:
+            if self.objective.academic_year_id != self.semester.academic_year_id:
+                errors['semester'] = (
+                    'Semester dan tahun pelajaran TP harus sama.'
+                )
+        if errors:
+            raise ValidationError(errors)
+
     def save(self, *args, **kwargs):
         if self.objective_id and not self.deskripsi_tp:
             self.deskripsi_tp = self.objective.deskripsi
+        self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -461,6 +1155,17 @@ class SummativeLM(models.Model):
         verbose_name = 'Nilai Sumatif LM'
         verbose_name_plural = 'Nilai Sumatif LM'
 
+    def clean(self):
+        if self.semester_id and self.subject_id:
+            if self.subject.academic_year_id != self.semester.academic_year_id:
+                raise ValidationError(
+                    {'semester': 'Semester dan tahun pelajaran mapel harus sama.'}
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.student} - {self.subject} LM{self.nomor} = {self.nilai}'
 
@@ -485,6 +1190,17 @@ class SummativeScore(models.Model):
         unique_together = [('student', 'subject', 'semester')]
         verbose_name = 'Nilai Sumatif Akhir'
         verbose_name_plural = 'Nilai Sumatif Akhir'
+
+    def clean(self):
+        if self.semester_id and self.subject_id:
+            if self.subject.academic_year_id != self.semester.academic_year_id:
+                raise ValidationError(
+                    {'semester': 'Semester dan tahun pelajaran mapel harus sama.'}
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.student} - {self.subject} ({self.semester})'
@@ -535,6 +1251,19 @@ class HomeroomNote(models.Model):
         verbose_name = 'Catatan & Absensi'
         verbose_name_plural = 'Catatan & Absensi'
 
+    def clean(self):
+        if self.semester_id and self.academic_year_id:
+            if self.semester.academic_year_id != self.academic_year_id:
+                raise ValidationError(
+                    {'academic_year': 'Tahun pelajaran harus sama dengan semester.'}
+                )
+
+    def save(self, *args, **kwargs):
+        if self.semester_id:
+            self.academic_year = self.semester.academic_year
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'Catatan {self.student} ({self.semester})'
 
@@ -564,6 +1293,19 @@ class Extracurricular(models.Model):
         ordering = ['urutan']
         verbose_name = 'Ekstrakurikuler'
         verbose_name_plural = 'Ekstrakurikuler'
+
+    def clean(self):
+        if self.semester_id and self.academic_year_id:
+            if self.semester.academic_year_id != self.academic_year_id:
+                raise ValidationError(
+                    {'academic_year': 'Tahun pelajaran harus sama dengan semester.'}
+                )
+
+    def save(self, *args, **kwargs):
+        if self.semester_id:
+            self.academic_year = self.semester.academic_year
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.nama} - {self.student}'
@@ -604,3 +1346,7 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f'{self.created_at:%d/%m/%Y %H:%M} - {self.aksi} - {self.model}'
+
+
+# Alias kompatibilitas: nama lama tetap dapat diimpor sampai kode migrasi selesai.
+School = SchoolProfile

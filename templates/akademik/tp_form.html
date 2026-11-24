@@ -28,9 +28,19 @@
             {{ form.subject }}{{ form.subject.errors }}
           </div>
           <div class="field">
+            <label for="{{ form.kode.id_for_label }}">Kode TP</label>
+            {{ form.kode }}{{ form.kode.errors }}
+            <div class="help">{{ form.kode.help_text }}</div>
+          </div>
+          <div class="field">
             <label for="{{ form.nomor.id_for_label }}">Nomor TP</label>
             {{ form.nomor }}{{ form.nomor.errors }}
             <div class="help">{{ form.nomor.help_text }}</div>
+          </div>
+          <div class="field full">
+            <label for="{{ form.learning_outcome.id_for_label }}">Capaian Pembelajaran (CP)</label>
+            {{ form.learning_outcome }}{{ form.learning_outcome.errors }}
+            <div class="help">{{ form.learning_outcome.help_text }}</div>
           </div>
           <div class="field full">
             <label for="{{ form.deskripsi.id_for_label }}">Tujuan Pembelajaran / Lingkup Materi</label>

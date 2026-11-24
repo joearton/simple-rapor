@@ -1,0 +1,40 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Impor Nilai {{ asesmen.nama }}{% endblock %}
+{% block topbar %}Impor Nilai Asesmen{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:asesmen_grid' asesmen.id %}?kelas={{ kelas.id|default:'' }}">{{ asesmen.nama }}</a>
+  <span>/</span>
+  <span>Impor</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>Impor Nilai {{ asesmen.nama }}</h2>
+    <p>{{ asesmen.subject.nama }} &middot; Kelas {{ kelas.nama_lengkap|default:"-" }}. Kolom mengikuti nama komponen asesmen.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:asesmen_ekspor' asesmen.id %}?kelas={{ kelas.id|default:'' }}"><svg class="icon"><use href="#i-file"/></svg> Unduh Template</a>
+    <a class="btn" href="{% url 'akademik:asesmen_grid' asesmen.id %}?kelas={{ kelas.id|default:'' }}"><svg class="icon"><use href="#i-back"/></svg> Kembali</a>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3>Unggah File Excel</h3></div>
+  <div class="panel-body">
+    <form method="post" enctype="multipart/form-data" id="form-impor-asesmen">
+      {% csrf_token %}
+      <div class="field" style="margin-bottom:14px">
+        <label for="file">File Excel (.xlsx)</label>
+        <input class="form-input" type="file" name="file" id="file" accept=".xlsx,.xlsm" required>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Impor Nilai</button>
+      </div>
+    </form>
+    <div class="note-box" style="margin-top:14px">
+      Gunakan tombol <strong>Unduh Template</strong> agar nama kolom sesuai. Sel kosong akan menghapus nilai pada komponen tersebut.
+    </div>
+  </div>
+</div>
+{% endblock %}

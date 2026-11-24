@@ -10,10 +10,17 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from .models import (
+    AssessmentComponent,
+    AssessmentResult,
+    ClassGroup,
     Extracurricular,
     FormativeScore,
+    Grade,
     HomeroomNote,
+    LearningMaterial,
     LearningObjective,
+    LearningOutcome,
+    LearningTask,
     Student,
     SummativeLM,
     SummativeScore,
@@ -50,9 +57,33 @@ KIND_INFO = {
         'import': True,
         'mapel': False,
     },
+    'kelas': {
+        'judul': 'Kelas',
+        'deskripsi': 'Impor daftar kelas per tahun pelajaran. Tingkat dicocokkan dengan master Tingkat Kelas.',
+        'import': True,
+        'mapel': False,
+    },
     'tp': {
         'judul': 'Tujuan Pembelajaran',
         'deskripsi': 'Impor TP untuk mata pelajaran yang dipilih. Nomor TP yang sama akan diperbarui.',
+        'import': True,
+        'mapel': True,
+    },
+    'cp': {
+        'judul': 'Capaian Pembelajaran',
+        'deskripsi': 'Impor CP untuk mata pelajaran yang dipilih. Cocokkan berdasarkan kode atau urutan.',
+        'import': True,
+        'mapel': True,
+    },
+    'materi': {
+        'judul': 'Materi Pembelajaran',
+        'deskripsi': 'Impor materi dan tautkan ke TP berdasarkan nomor TP.',
+        'import': True,
+        'mapel': True,
+    },
+    'tugas': {
+        'judul': 'Tugas Pembelajaran',
+        'deskripsi': 'Impor tugas beserta TP dan kelas terkait. Cocokkan berdasarkan judul tugas.',
         'import': True,
         'mapel': True,
     },
@@ -202,7 +233,7 @@ def _baris_data(ws):
 
 
 def _cari_siswa(kelas, nisn='', nis='', nama=''):
-    qs = Student.objects.filter(class_group=kelas)
+    qs = Student.objects.in_class(kelas)
     siswa = qs.filter(nisn=nisn).first() if nisn else None
     if siswa is None and nis:
         siswa = qs.filter(nis=nis).first()
@@ -265,7 +296,9 @@ def import_siswa(file_obj, kelas):
             if baru:
                 siswa = Student(class_group=kelas)
                 if no_urut is None:
-                    no_urut = (Student.objects.filter(class_group=kelas).order_by('-no_urut').first().no_urut + 1) if Student.objects.filter(class_group=kelas).exists() else 1
+                    qs_siswa = Student.objects.in_class(kelas)
+                    terakhir = qs_siswa.order_by('-no_urut').first()
+                    no_urut = (terakhir.no_urut + 1) if terakhir else 1
                 siswa.no_urut = no_urut
             elif no_urut is not None:
                 siswa.no_urut = no_urut
@@ -389,6 +422,82 @@ def import_guru(file_obj, kelas=None, tahun=None):
     return {'dibuat': dibuat, 'diperbarui': diperbarui}
 
 
+# ---------------- KELAS ----------------
+
+KELAS_HEADERS = ['Tingkat', 'Nama Kelas', 'Fase', 'Wali Kelas']
+KELAS_WIDTHS = [12, 30, 8, 30]
+
+
+def export_kelas(tahun, template=False):
+    wb = Workbook()
+    ws = _sheet(wb, 'Data Kelas', KELAS_HEADERS, KELAS_WIDTHS)
+    if not template and tahun:
+        kelas_qs = ClassGroup.objects.filter(academic_year=tahun).select_related(
+            'grade', 'wali_kelas_guru'
+        ).order_by('tingkat', 'nama')
+        for kelas in kelas_qs:
+            ws.append([
+                kelas.grade.nama if kelas.grade_id else kelas.tingkat,
+                kelas.nama,
+                kelas.fase,
+                kelas.nama_wali,
+            ])
+    return _response(wb, _nama_file('data-kelas', tahun.tahun if tahun else ''))
+
+
+def import_kelas(file_obj, tahun):
+    if tahun is None:
+        raise ExcelImportError(['Tahun pelajaran belum ditetapkan.'])
+    wb = _buka(file_obj)
+    ws = wb.active
+    errors = []
+    dibuat = diperbarui = 0
+    with transaction.atomic():
+        for baris, row in _baris_data(ws):
+            values = list(row) + [''] * max(0, 4 - len(row))
+            tingkat = _teks(values[0])
+            nama = _teks(values[1])
+            if not tingkat or not nama:
+                errors.append(f'Baris {baris}: tingkat dan nama kelas wajib diisi.')
+                continue
+            fase = _teks(values[2]) or 'D'
+            grade, _ = Grade.objects.get_or_create(
+                nama=tingkat,
+                defaults={'fase': fase, 'urutan': 0, 'aktif': True},
+            )
+            defaults = {'tingkat': grade.nama, 'fase': fase}
+            wali_nama = _teks(values[3])
+            if wali_nama:
+                wali = Teacher.objects.filter(nama__iexact=wali_nama).first()
+                if wali is None:
+                    errors.append(f'Baris {baris}: guru "{wali_nama}" tidak ditemukan.')
+                    continue
+                defaults.update({
+                    'wali_kelas_guru': wali,
+                    'wali_kelas': wali.nama,
+                    'nktam_wali': wali.nktam,
+                })
+            else:
+                defaults.update({
+                    'wali_kelas_guru': None,
+                    'wali_kelas': '',
+                    'nktam_wali': '',
+                })
+            _, baru = ClassGroup.objects.update_or_create(
+                academic_year=tahun,
+                grade=grade,
+                nama=nama,
+                defaults=defaults,
+            )
+            if baru:
+                dibuat += 1
+            else:
+                diperbarui += 1
+        if errors:
+            raise ExcelImportError(errors)
+    return {'dibuat': dibuat, 'diperbarui': diperbarui}
+
+
 # ---------------- MAPEL ----------------
 
 MAPEL_HEADERS = ['Urutan', 'Kode', 'Nama Mata Pelajaran', 'Deskripsi', 'Guru Pengampu', 'Jumlah TP']
@@ -460,19 +569,26 @@ def import_mapel(file_obj, kelas=None, tahun=None):
 
 # ---------------- TP ----------------
 
-TP_HEADERS = ['No TP', 'Tujuan Pembelajaran / Lingkup Materi', 'Guru Pengampu', 'Status']
-TP_WIDTHS = [8, 90, 26, 10]
+TP_HEADERS = [
+    'No TP', 'Tujuan Pembelajaran / Lingkup Materi', 'Guru Pengampu', 'Status',
+    'Kode TP', 'CP Terkait',
+]
+TP_WIDTHS = [8, 90, 26, 10, 14, 16]
 
 
 def export_tp(subject, academic_year, template=False):
     wb = Workbook()
     ws = _sheet(wb, 'Tujuan Pembelajaran', TP_HEADERS, TP_WIDTHS)
     if not template:
-        qs = subject.tujuan_list.filter(academic_year=academic_year).select_related('guru')
+        qs = subject.tujuan_list.filter(academic_year=academic_year).select_related(
+            'guru', 'learning_outcome'
+        )
         for tp in qs:
+            cp = tp.learning_outcome
             ws.append([
                 tp.nomor, tp.deskripsi, tp.guru.nama if tp.guru else '',
-                'Aktif' if tp.aktif else 'Arsip',
+                'Aktif' if tp.aktif else 'Arsip', tp.kode,
+                (cp.kode or str(cp.urutan)) if cp else '',
             ])
     return _response(wb, _nama_file('tp', f'{subject.nama}-{academic_year.tahun}'))
 
@@ -482,16 +598,31 @@ def import_tp(file_obj, subject, academic_year, guru=None):
     ws = wb.active
     errors = []
     dibuat = diperbarui = 0
+    cps = list(LearningOutcome.objects.filter(subject=subject))
     with transaction.atomic():
         for baris, row in _baris_data(ws):
-            values = list(row) + [''] * max(0, 4 - len(row))
+            values = list(row) + [''] * max(0, 6 - len(row))
             nomor = _ke_int(values[0])
             deskripsi = _teks(values[1])
             if nomor is None or not deskripsi:
                 errors.append(f'Baris {baris}: nomor dan tujuan pembelajaran wajib diisi.')
                 continue
+            cp_label = _teks(values[5])
+            cp = None
+            if cp_label:
+                cp = next(
+                    (item for item in cps if (item.kode or '').lower() == cp_label.lower()),
+                    None,
+                )
+                if cp is None and cp_label.isdigit():
+                    cp = next((item for item in cps if item.urutan == int(cp_label)), None)
+                if cp is None:
+                    errors.append(f'Baris {baris}: CP "{cp_label}" tidak ditemukan.')
+                    continue
             defaults = {
                 'deskripsi': deskripsi,
+                'kode': _teks(values[4]),
+                'learning_outcome': cp,
                 'aktif': not _teks(values[3]).lower().startswith('arsip'),
             }
             if guru:
@@ -500,6 +631,285 @@ def import_tp(file_obj, subject, academic_year, guru=None):
                 subject=subject, academic_year=academic_year, nomor=nomor,
                 defaults=defaults,
             )
+            if baru:
+                dibuat += 1
+            else:
+                diperbarui += 1
+        if errors:
+            raise ExcelImportError(errors)
+    return {'dibuat': dibuat, 'diperbarui': diperbarui}
+
+
+# ---------------- CP ----------------
+
+CP_HEADERS = ['Kode', 'Fase', 'Capaian Pembelajaran', 'Urutan', 'Status']
+CP_WIDTHS = [14, 8, 90, 10, 12]
+
+
+def _nomor_dari_teks(teks):
+    return [int(n) for n in re.findall(r'\d+', str(teks or ''))]
+
+
+def export_cp(subject, template=False):
+    wb = Workbook()
+    ws = _sheet(wb, 'Capaian Pembelajaran', CP_HEADERS, CP_WIDTHS)
+    if not template:
+        for cp in LearningOutcome.objects.filter(subject=subject).order_by('urutan', 'kode'):
+            ws.append([
+                cp.kode, cp.fase, cp.deskripsi, cp.urutan,
+                'Aktif' if cp.aktif else 'Arsip',
+            ])
+    return _response(wb, _nama_file('cp', subject.nama))
+
+
+def import_cp(file_obj, subject):
+    wb = _buka(file_obj)
+    ws = wb.active
+    errors = []
+    dibuat = diperbarui = 0
+    with transaction.atomic():
+        for baris, row in _baris_data(ws):
+            values = list(row) + [''] * max(0, 5 - len(row))
+            kode = _teks(values[0])
+            deskripsi = _teks(values[2])
+            urutan = _ke_int(values[3])
+            if not deskripsi:
+                errors.append(f'Baris {baris}: capaian pembelajaran wajib diisi.')
+                continue
+            cp = None
+            if kode:
+                cp = LearningOutcome.objects.filter(subject=subject, kode=kode).first()
+            if cp is None and urutan is not None:
+                cp = LearningOutcome.objects.filter(subject=subject, urutan=urutan).first()
+            baru = cp is None
+            if baru:
+                cp = LearningOutcome(subject=subject)
+                if urutan is None:
+                    urutan = (
+                        LearningOutcome.objects.filter(subject=subject)
+                        .order_by('-urutan').values_list('urutan', flat=True).first()
+                        or 0
+                    ) + 1
+                cp.urutan = urutan
+            elif urutan is not None:
+                cp.urutan = urutan
+            cp.kode = kode
+            kelas = ClassGroup.objects.filter(academic_year=subject.academic_year).first()
+            cp.fase = _teks(values[1]) or (kelas.fase if kelas else 'D')
+            cp.deskripsi = deskripsi
+            cp.aktif = not _teks(values[4]).lower().startswith('arsip')
+            try:
+                cp.save()
+            except Exception as exc:
+                errors.append(f'Baris {baris}: gagal menyimpan CP ({exc}).')
+                continue
+            if baru:
+                dibuat += 1
+            else:
+                diperbarui += 1
+        if errors:
+            raise ExcelImportError(errors)
+    return {'dibuat': dibuat, 'diperbarui': diperbarui}
+
+
+# ---------------- MATERI ----------------
+
+MATERI_HEADERS = [
+    'Kode', 'Judul Materi', 'Deskripsi', 'TP Terkait', 'Urutan', 'Status',
+]
+MATERI_WIDTHS = [14, 34, 60, 20, 10, 12]
+
+
+def export_materi(subject, template=False):
+    wb = Workbook()
+    ws = _sheet(wb, 'Materi', MATERI_HEADERS, MATERI_WIDTHS)
+    if not template:
+        for materi in LearningMaterial.objects.filter(subject=subject).prefetch_related(
+            'objectives'
+        ).order_by('urutan', 'judul'):
+            nomor_tp = ', '.join(str(tp.nomor) for tp in materi.objectives.all())
+            ws.append([
+                materi.kode, materi.judul, materi.deskripsi, nomor_tp,
+                materi.urutan, 'Aktif' if materi.aktif else 'Arsip',
+            ])
+    return _response(wb, _nama_file('materi', subject.nama))
+
+
+def import_materi(file_obj, subject):
+    wb = _buka(file_obj)
+    ws = wb.active
+    errors = []
+    dibuat = diperbarui = 0
+    objectives = {
+        tp.nomor: tp for tp in LearningObjective.objects.filter(
+            subject=subject, academic_year=subject.academic_year
+        )
+    }
+    with transaction.atomic():
+        for baris, row in _baris_data(ws):
+            values = list(row) + [''] * max(0, 6 - len(row))
+            kode = _teks(values[0])
+            judul = _teks(values[1])
+            urutan = _ke_int(values[4])
+            if not judul:
+                errors.append(f'Baris {baris}: judul materi wajib diisi.')
+                continue
+            materi = None
+            if kode:
+                materi = LearningMaterial.objects.filter(subject=subject, kode=kode).first()
+            if materi is None:
+                materi = LearningMaterial.objects.filter(subject=subject, judul=judul).first()
+            baru = materi is None
+            if baru:
+                materi = LearningMaterial(subject=subject)
+            materi.kode = kode
+            materi.judul = judul
+            materi.deskripsi = _teks(values[2])
+            if urutan is not None:
+                materi.urutan = urutan
+            elif baru:
+                materi.urutan = (
+                    LearningMaterial.objects.filter(subject=subject)
+                    .order_by('-urutan').values_list('urutan', flat=True).first()
+                    or 0
+                ) + 1
+            materi.aktif = not _teks(values[5]).lower().startswith('arsip')
+            try:
+                materi.save()
+            except Exception as exc:
+                errors.append(f'Baris {baris}: gagal menyimpan materi ({exc}).')
+                continue
+            nomor_list = _nomor_dari_teks(values[3])
+            terkait = []
+            for nomor in nomor_list:
+                tp = objectives.get(nomor)
+                if tp is None:
+                    errors.append(f'Baris {baris}: TP {nomor} tidak ditemukan.')
+                else:
+                    terkait.append(tp)
+            materi.objectives.set(terkait)
+            if baru:
+                dibuat += 1
+            else:
+                diperbarui += 1
+        if errors:
+            raise ExcelImportError(errors)
+    return {'dibuat': dibuat, 'diperbarui': diperbarui}
+
+
+# ---------------- TUGAS ----------------
+
+TUGAS_HEADERS = [
+    'Judul', 'Deskripsi', 'Instruksi', 'Tanggal Pemberian', 'Batas Pengumpulan',
+    'Bobot', 'Status', 'TP Terkait', 'Kelas',
+]
+TUGAS_WIDTHS = [34, 50, 60, 16, 16, 10, 12, 20, 30]
+
+STATUS_TUGAS = {
+    'draf': 'DRAF',
+    'draft': 'DRAF',
+    'terbit': 'TERBIT',
+    'tutup': 'TUTUP',
+    'ditutup': 'TUTUP',
+}
+
+
+def export_tugas(subject, template=False):
+    wb = Workbook()
+    ws = _sheet(wb, 'Tugas', TUGAS_HEADERS, TUGAS_WIDTHS)
+    if not template:
+        qs = LearningTask.objects.filter(subject=subject).prefetch_related(
+            'objectives', 'class_groups'
+        ).order_by('judul')
+        for tugas in qs:
+            nomor_tp = ', '.join(str(tp.nomor) for tp in tugas.objectives.all())
+            kelas = ', '.join(k.nama_lengkap for k in tugas.class_groups.all())
+            ws.append([
+                tugas.judul, tugas.deskripsi, tugas.instruksi,
+                tugas.tanggal_pemberian, tugas.batas_pengumpulan,
+                tugas.bobot, tugas.get_status_display(), nomor_tp, kelas,
+            ])
+            ws.cell(row=ws.max_row, column=4).number_format = 'DD-MM-YYYY'
+            ws.cell(row=ws.max_row, column=5).number_format = 'DD-MM-YYYY'
+    return _response(wb, _nama_file('tugas', subject.nama))
+
+
+def _kelas_dari_teks(tahun, teks):
+    daftar = [t.strip() for t in re.split(r'[,;]', str(teks or '')) if t.strip()]
+    if not daftar:
+        return [], []
+    peta = {}
+    for kelas in ClassGroup.objects.filter(academic_year=tahun):
+        peta[kelas.nama_lengkap.lower()] = kelas
+        peta[kelas.nama.lower()] = kelas
+    ditemukan = []
+    hilang = []
+    for label in daftar:
+        kelas = peta.get(label.lower())
+        if kelas is None:
+            hilang.append(label)
+        else:
+            ditemukan.append(kelas)
+    return ditemukan, hilang
+
+
+def import_tugas(file_obj, subject):
+    wb = _buka(file_obj)
+    ws = wb.active
+    errors = []
+    dibuat = diperbarui = 0
+    objectives = {
+        tp.nomor: tp for tp in LearningObjective.objects.filter(
+            subject=subject, academic_year=subject.academic_year
+        )
+    }
+    with transaction.atomic():
+        for baris, row in _baris_data(ws):
+            values = list(row) + [''] * max(0, 9 - len(row))
+            judul = _teks(values[0])
+            if not judul:
+                errors.append(f'Baris {baris}: judul tugas wajib diisi.')
+                continue
+            tugas = LearningTask.objects.filter(
+                subject=subject, academic_year=subject.academic_year, judul=judul
+            ).first()
+            baru = tugas is None
+            if baru:
+                tugas = LearningTask(subject=subject, academic_year=subject.academic_year)
+            tugas.judul = judul
+            tugas.deskripsi = _teks(values[1])
+            tugas.instruksi = _teks(values[2])
+            awal = _ke_tanggal(values[3])
+            akhir = _ke_tanggal(values[4])
+            if values[3] not in (None, '') and awal is None:
+                errors.append(f'Baris {baris}: tanggal pemberian tidak dikenali.')
+                continue
+            if values[4] not in (None, '') and akhir is None:
+                errors.append(f'Baris {baris}: batas pengumpulan tidak dikenali.')
+                continue
+            tugas.tanggal_pemberian = awal
+            tugas.batas_pengumpulan = akhir
+            bobot = _ke_desimal(values[5])
+            tugas.bobot = bobot if bobot is not None else 0
+            tugas.status = STATUS_TUGAS.get(_teks(values[6]).lower(), 'DRAF')
+            try:
+                tugas.save()
+            except Exception as exc:
+                errors.append(f'Baris {baris}: gagal menyimpan tugas ({exc}).')
+                continue
+            nomor_list = _nomor_dari_teks(values[7])
+            terkait = []
+            for nomor in nomor_list:
+                tp = objectives.get(nomor)
+                if tp is None:
+                    errors.append(f'Baris {baris}: TP {nomor} tidak ditemukan.')
+                else:
+                    terkait.append(tp)
+            tugas.objectives.set(terkait)
+            kelas, hilang = _kelas_dari_teks(subject.academic_year, values[8])
+            for label in hilang:
+                errors.append(f'Baris {baris}: kelas "{label}" tidak ditemukan.')
+            tugas.class_groups.set(kelas)
             if baru:
                 dibuat += 1
             else:
@@ -681,6 +1091,82 @@ def import_sumatif(file_obj, subject, semester, kelas, guru=None):
     return {'lm': jumlah_lm, 'nilai': jumlah_nilai}
 
 
+# ---------------- ASESMEN GENERIK ----------------
+
+def export_asesmen(assessment, kelas):
+    components = list(assessment.components.all())
+    headers = ['No', 'NIS', 'NISN', 'Nama Peserta Didik'] + [
+        component.nama for component in components
+    ]
+    widths = [6, 14, 16, 30] + [12] * len(components)
+    wb = Workbook()
+    ws = _sheet(wb, 'Asesmen', headers, widths)
+    results = {
+        (hasil.student_id, hasil.component_id): hasil.nilai
+        for hasil in AssessmentResult.objects.filter(
+            component__in=components, student__in=daftar_siswa(kelas)
+        )
+    }
+    for i, siswa in enumerate(daftar_siswa(kelas), start=1):
+        ws.append(
+            [i, siswa.nis, siswa.nisn, siswa.nama]
+            + [results.get((siswa.id, component.id)) for component in components]
+        )
+    return _response(wb, _nama_file('asesmen', assessment.nama))
+
+
+def import_asesmen(file_obj, assessment, kelas):
+    wb = _buka(file_obj)
+    ws = wb.active
+    components = list(assessment.components.all())
+    header = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
+    kolom = {}
+    for index, label in enumerate(header):
+        if index < 4:
+            continue
+        component = next(
+            (c for c in components if c.nama.strip().lower() == str(label or '').strip().lower()),
+            None,
+        )
+        if component is not None:
+            kolom[index] = component
+    errors = []
+    jumlah = 0
+    with transaction.atomic():
+        for baris, row in _baris_data(ws):
+            values = list(row) + [''] * max(0, 4 - len(row))
+            nis, nisn, nama = _teks(values[1]), _teks(values[2]), _teks(values[3])
+            if not (nis or nisn or nama):
+                continue
+            siswa = _cari_siswa(kelas, nisn=nisn, nis=nis, nama=nama)
+            if siswa is None:
+                errors.append(f'Baris {baris}: siswa "{nama}" tidak ditemukan.')
+                continue
+            for index, component in kolom.items():
+                if index >= len(values):
+                    continue
+                raw = values[index]
+                if raw in (None, ''):
+                    AssessmentResult.objects.filter(
+                        component=component, student=siswa
+                    ).delete()
+                    continue
+                nilai = _ke_desimal(raw)
+                if nilai is None or nilai < 0 or nilai > component.nilai_maksimal:
+                    errors.append(
+                        f'Baris {baris} {component.nama}: nilai harus '
+                        f'0-{component.nilai_maksimal}.'
+                    )
+                    continue
+                AssessmentResult.objects.update_or_create(
+                    component=component, student=siswa, defaults={'nilai': nilai},
+                )
+                jumlah += 1
+        if errors:
+            raise ExcelImportError(errors)
+    return {'diperbarui': jumlah}
+
+
 # ---------------- CATATAN ----------------
 
 CATATAN_HEADERS = ['No', 'NIS', 'NISN', 'Nama Peserta Didik', 'Catatan Wali Kelas', 'Sakit', 'Izin', 'Alpa']
@@ -749,7 +1235,7 @@ def export_ekskul(kelas, semester, template=False):
     if not template:
         data = {}
         for eks in Extracurricular.objects.filter(
-            student__class_group=kelas, semester=semester
+            student__in=daftar_siswa(kelas), semester=semester
         ).order_by('urutan'):
             data.setdefault(eks.student_id, {})[eks.urutan] = eks
         for i, siswa in enumerate(daftar_siswa(kelas), start=1):

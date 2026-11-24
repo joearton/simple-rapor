@@ -148,12 +148,12 @@ Nilai kosong tidak dihitung nol. Bulatkan hanya pada tahap akhir.
 
 | Sekarang | Target | Catatan migrasi |
 |---|---|---|
-| School | SchoolProfile | rename/field tambah |
-| AcademicYear, Semester, ClassGroup, Teacher, Subject, TeachingAssignment | sama | tambah constraint/permission |
-| Student | Student + StudentEnrollment | backfill enrollment dari `class_group` |
-| LearningObjective (TP+tugas) | LearningObjective + LearningTask | pisahkan field tugas |
-| FormativeScore | Assessment(FORMATIF) + Component/Result | satu komponen per TP/tugas |
-| SummativeLM / SummativeScore | Assessment(LM/STS/SAS) + Component/Result | komponen LM-1..n, STS, SAS tes/non-tes |
+| School | SchoolProfile | selesai; tabel `akademik_school` dipertahankan, alias `School` masih tersedia |
+| AcademicYear, Semester, ClassGroup, Teacher, Subject, TeachingAssignment | sama | selesai; `ClassGroup.grade` & `TeachingAssignment.semester` ditambahkan |
+| Student | Student + StudentEnrollment | selesai; `class_group` = kelas terkini, riwayat di `StudentEnrollment` |
+| LearningObjective (TP+tugas) | LearningObjective + LearningTask | selesai; kolom tugas lama sudah dihapus di 0012 sehingga tidak ada backfill |
+| FormativeScore | Assessment(FORMATIF) + Component/Result | selesai; disinkronkan via signal + backfill 0018 |
+| SummativeLM / SummativeScore | Assessment(LM/STS/SAS) + Component/Result | selesai; komponen LM-1..n, STS, SAS tes/non-tes |
 | HomeroomNote | StudentTeacherNote + StudentAttendance | pecah field |
 | Extracurricular | Extracurricular + StudentExtracurricular | master + penilaian siswa |
 | Perhitungan rapor di service | ReportCard + ReportSubjectGrade | snapshot hasil final |

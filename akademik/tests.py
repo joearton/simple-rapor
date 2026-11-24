@@ -1,28 +1,50 @@
 from decimal import Decimal
+from io import BytesIO
+import json
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from openpyxl import Workbook, load_workbook
 
 from .models import (
     AcademicYear,
+    Assessment,
+    AssessmentComponent,
+    AssessmentResult,
     ClassGroup,
     EvaluasiFormatif,
     EvaluasiSumatif,
     Extracurricular,
     FormativeScore,
+    Grade,
+    GradeConfiguration,
     HomeroomNote,
+    LearningMaterial,
     LearningObjective,
+    LearningOutcome,
+    LearningTask,
+    LearningTaskSubmission,
     School,
     Semester,
     Student,
+    StudentEnrollment,
     Subject,
     SummativeLM,
     SummativeScore,
     Teacher,
     TeachingAssignment,
 )
-from .services import angka, data_leger, data_rapor, deskripsi_capaian, ringkasan_sumatif
+from .services import (
+    angka,
+    data_leger,
+    data_rapor,
+    deskripsi_capaian,
+    hitung_nilai,
+    ringkasan_sumatif,
+)
 
 
 class RaporTestBase(TestCase):
@@ -1014,3 +1036,711 @@ class ElemenUiTest(RaporTestBase):
         self.assertIn('id="period-year-select"', html)
         self.assertIn('id="user-menu"', html)
         self.assertIn('id="dashboard-hero"', html)
+
+
+class Tahap2StrukturTest(RaporTestBase):
+    """Tahap 2: master Grade, riwayat enrollment, dan konsistensi tahun."""
+
+    def test_siswa_otomatis_memiliki_enrollment(self):
+        enrollment = StudentEnrollment.objects.get(student=self.siswa)
+        self.assertEqual(enrollment.class_group, self.kelas)
+        self.assertEqual(enrollment.academic_year, self.tahun)
+        self.assertEqual(enrollment.status, 'AKTIF')
+
+    def test_pindah_kelas_dalam_tahun_sama_memperbarui_enrollment(self):
+        kelas_baru = ClassGroup.objects.create(
+            academic_year=self.tahun, tingkat='VII', nama='Pindahan', fase='D'
+        )
+        self.siswa.class_group = kelas_baru
+        self.siswa.save()
+
+        self.assertEqual(self.siswa.enrollments.count(), 1)
+        enrollment = self.siswa.enrollments.get()
+        self.assertEqual(enrollment.class_group, kelas_baru)
+        self.assertNotIn(self.siswa, Student.objects.in_class(self.kelas))
+        self.assertIn(self.siswa, Student.objects.in_class(kelas_baru))
+
+    def test_kenaikan_kelas_tidak_menghapus_riwayat(self):
+        tahun_baru = AcademicYear.objects.create(tahun='2027/2028')
+        kelas_baru = ClassGroup.objects.create(
+            academic_year=tahun_baru, tingkat='VIII', nama='Naik', fase='D'
+        )
+        self.siswa.class_group = kelas_baru
+        self.siswa.save()
+
+        self.assertEqual(self.siswa.enrollments.count(), 2)
+        lama = self.siswa.enrollment_for(self.tahun)
+        baru = self.siswa.enrollment_for(tahun_baru)
+        self.assertEqual(lama.class_group, self.kelas)
+        self.assertEqual(baru.class_group, kelas_baru)
+        # Roster kelas lama tetap dapat dilihat dari riwayat.
+        self.assertIn(self.siswa, Student.objects.in_class(self.kelas))
+        self.assertIn(self.siswa, Student.objects.in_class(kelas_baru))
+
+    def test_enrollment_menolak_tahun_yang_tidak_sesuai(self):
+        tahun_lain = AcademicYear.objects.create(tahun='2029/2030')
+        enrollment = StudentEnrollment(
+            student=self.siswa, class_group=self.kelas, academic_year=tahun_lain,
+        )
+        with self.assertRaises(ValidationError):
+            enrollment.save()
+        self.assertEqual(self.siswa.enrollments.count(), 1)
+
+    def test_grade_terbentuk_dari_tingkat_dan_sinkron_dua_arah(self):
+        kelas = ClassGroup.objects.create(
+            academic_year=self.tahun, tingkat='VIII', nama='Delapan', fase='D'
+        )
+        self.assertIsNotNone(kelas.grade_id)
+        self.assertEqual(kelas.grade.nama, 'VIII')
+
+        kelas.grade = Grade.objects.create(nama='Kelas Khusus', fase='D', urutan=9)
+        kelas.save()
+        kelas.refresh_from_db()
+        self.assertEqual(kelas.tingkat, 'Kelas Khusus')
+
+    def test_ubah_tingkat_lewat_form_memperbarui_grade(self):
+        admin = User.objects.create_superuser('admin_grade', 'g@uji.id', 'rahasia123')
+        self.client.force_login(admin)
+        response = self.client.post(
+            reverse('akademik:kelas_ubah', args=[self.kelas.id]),
+            {
+                'academic_year': self.tahun.id,
+                'tingkat': 'VIII',
+                'nama': self.kelas.nama,
+                'fase': 'D',
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.kelas.refresh_from_db()
+        self.assertEqual(self.kelas.tingkat, 'VIII')
+        self.assertEqual(self.kelas.grade.nama, 'VIII')
+
+    def test_penugasan_menolak_tahun_tidak_konsisten(self):
+        tahun_lain = AcademicYear.objects.create(tahun='2027/2028')
+        kelas_lain = ClassGroup.objects.create(
+            academic_year=tahun_lain, tingkat='VIII', nama='Lain', fase='D'
+        )
+        penugasan = TeachingAssignment(
+            teacher=Teacher.objects.create(nama='Guru Lain'),
+            subject=self.mapel,
+            class_group=kelas_lain,
+            academic_year=tahun_lain,
+        )
+        with self.assertRaises(ValidationError):
+            penugasan.save()
+
+    def test_penugasan_per_semester_dan_setahun_dapat_berdampingan(self):
+        guru = Teacher.objects.create(nama='Guru Semester')
+        setahun = TeachingAssignment.objects.create(
+            teacher=guru, subject=self.mapel, class_group=self.kelas,
+            academic_year=self.tahun,
+        )
+        per_semester = TeachingAssignment.objects.create(
+            teacher=guru, subject=self.mapel, class_group=self.kelas,
+            academic_year=self.tahun, semester=self.semester,
+        )
+        self.assertIsNone(setahun.semester_id)
+        self.assertEqual(per_semester.semester, self.semester)
+
+        duplikat = TeachingAssignment(
+            teacher=guru, subject=self.mapel, class_group=self.kelas,
+            academic_year=self.tahun, semester=self.semester,
+        )
+        with self.assertRaises(ValidationError):
+            duplikat.save()
+
+    def test_nilai_sumatif_menolak_semester_beda_tahun(self):
+        tahun_lain = AcademicYear.objects.create(tahun='2027/2028')
+        semester_lain = Semester.objects.create(academic_year=tahun_lain, nama='I')
+        with self.assertRaises(ValidationError):
+            SummativeScore.objects.create(
+                student=self.siswa, subject=self.mapel, semester=semester_lain,
+                sts=Decimal('80'),
+            )
+
+    def test_import_dan_export_kelas(self):
+        from . import excel_io
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(excel_io.KELAS_HEADERS)
+        ws.append(['VIII', 'Impor Delapan', 'D', ''])
+        data = BytesIO()
+        wb.save(data)
+        data.seek(0)
+
+        hasil = excel_io.import_kelas(data, self.tahun)
+        self.assertEqual(hasil['dibuat'], 1)
+        kelas = ClassGroup.objects.get(academic_year=self.tahun, nama='Impor Delapan')
+        self.assertEqual(kelas.grade.nama, 'VIII')
+        self.assertEqual(kelas.tingkat, 'VIII')
+
+        response = excel_io.export_kelas(self.tahun, template=True)
+        isi = load_workbook(BytesIO(response.content)).active
+        self.assertEqual(
+            [cell.value for cell in isi[1]], excel_io.KELAS_HEADERS
+        )
+
+    def test_halaman_impor_kelas_dapat_dibuka(self):
+        from django.contrib.auth.models import User as AuthUser
+
+        admin = AuthUser.objects.create_superuser('admin_kelas', 'k@uji.id', 'rahasia123')
+        self.client.force_login(admin)
+        url = reverse('akademik:impor', args=['kelas']) + f'?tahun={self.tahun.id}'
+        self.assertEqual(self.client.get(url).status_code, 200)
+        export_url = reverse('akademik:ekspor', args=['kelas']) + f'?tahun={self.tahun.id}'
+        self.assertEqual(self.client.get(export_url).status_code, 200)
+
+
+class Tahap3PembelajaranTest(RaporTestBase):
+    """Tahap 3: CP, materi, tugas, dan pengumpulan tugas."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('admin_tahap3', 't3@uji.id', 'rahasia123')
+        self.client.force_login(self.admin)
+        self.guru = Teacher.objects.create(nama='Guru Tahap Tiga')
+        TeachingAssignment.objects.create(
+            teacher=self.guru, subject=self.mapel, class_group=self.kelas,
+            academic_year=self.tahun,
+        )
+
+    def test_crud_cp_dan_arsip_saat_dipakai_tp(self):
+        response = self.client.post(reverse('akademik:cp_tambah'), {
+            'subject': self.mapel.id, 'kode': 'CP.1', 'fase': 'D',
+            'deskripsi': 'peserta didik mampu bernalar tentang bilangan',
+            'urutan': '', 'aktif': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        cp = LearningOutcome.objects.get(subject=self.mapel, kode='CP.1')
+        self.assertEqual(cp.urutan, 1)
+
+        tp = LearningObjective.objects.create(
+            subject=self.mapel, learning_outcome=cp, academic_year=self.tahun,
+            nomor=10, deskripsi='menjelaskan bilangan bulat',
+        )
+        self.client.post(reverse('akademik:cp_list', args=[self.mapel.id]), {
+            'aksi': 'hapus', 'cp_id': cp.id,
+        })
+        cp.refresh_from_db()
+        self.assertFalse(cp.aktif)
+        self.assertTrue(LearningOutcome.objects.filter(pk=cp.id).exists())
+
+        tp.delete()
+        self.client.post(reverse('akademik:cp_list', args=[self.mapel.id]), {
+            'aksi': 'hapus', 'cp_id': cp.id,
+        })
+        self.assertFalse(LearningOutcome.objects.filter(pk=cp.id).exists())
+
+    def test_materi_menautkan_beberapa_tp(self):
+        response = self.client.post(reverse('akademik:materi_tambah'), {
+            'subject': self.mapel.id,
+            'objectives': [self.tp1.id, self.tp2.id],
+            'kode': 'M.1',
+            'judul': 'Operasi Bilangan',
+            'deskripsi': 'Materi operasi bilangan bulat',
+            'urutan': '',
+            'aktif': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        materi = LearningMaterial.objects.get(subject=self.mapel, kode='M.1')
+        self.assertEqual(materi.urutan, 1)
+        self.assertEqual(materi.objectives.count(), 2)
+        self.assertContains(
+            self.client.get(reverse('akademik:materi_list', args=[self.mapel.id])),
+            'Operasi Bilangan',
+        )
+
+    def test_tugas_terhubung_kelas_tp_dan_pembuat(self):
+        response = self.client.post(reverse('akademik:tugas_pembelajaran_tambah'), {
+            'subject': self.mapel.id,
+            'class_groups': [self.kelas.id],
+            'objectives': [self.tp1.id],
+            'judul': 'Latihan Pecahan',
+            'deskripsi': 'Kerjakan latihan',
+            'instruksi': 'Tulis langkah pengerjaan',
+            'tanggal_pemberian': '2026-11-20',
+            'batas_pengumpulan': '2026-11-27',
+            'bobot': '20',
+            'status': 'TERBIT',
+        })
+        self.assertEqual(response.status_code, 302)
+        tugas = LearningTask.objects.get(judul='Latihan Pecahan')
+        self.assertEqual(tugas.academic_year, self.tahun)
+        self.assertEqual(tugas.created_by, self.guru)
+        self.assertEqual(tugas.objectives.get(), self.tp1)
+        self.assertEqual(tugas.class_groups.get(), self.kelas)
+
+    def test_tugas_menolak_tp_dari_mapel_lain(self):
+        response = self.client.post(reverse('akademik:tugas_pembelajaran_tambah'), {
+            'subject': self.mapel.id,
+            'objectives': [LearningObjective.objects.create(
+                subject=self.mapel2, academic_year=self.tahun, nomor=1,
+                deskripsi='TP mapel lain',
+            ).id],
+            'judul': 'Tugas Salah',
+            'bobot': '0', 'status': 'DRAF',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Semua TP harus berasal dari mata pelajaran yang sama',
+                            status_code=200)
+        self.assertFalse(LearningTask.objects.filter(judul='Tugas Salah').exists())
+
+    def test_pengumpulan_tugas_disimpan_dari_halaman_detail(self):
+        tugas = LearningTask.objects.create(
+            subject=self.mapel, academic_year=self.tahun, judul='Tugas Kumpul',
+            status='TERBIT', bobot=Decimal('10'),
+        )
+        tugas.class_groups.add(self.kelas)
+        tugas.objectives.add(self.tp1)
+        url = reverse('akademik:tugas_pembelajaran_detail', args=[tugas.id])
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+        response = self.client.post(url, {
+            'kelas': self.kelas.id,
+            f'status_{self.siswa.id}': 'DINILAI',
+            f'nilai_{self.siswa.id}': '88',
+            f'catatan_{self.siswa.id}': 'Bagus',
+        })
+        self.assertEqual(response.status_code, 302)
+        submission = LearningTaskSubmission.objects.get(task=tugas, student=self.siswa)
+        self.assertEqual(submission.status, 'DINILAI')
+        self.assertEqual(submission.nilai, Decimal('88'))
+        self.assertEqual(submission.catatan_guru, 'Bagus')
+        self.assertIsNotNone(submission.submitted_at)
+        self.assertIsNotNone(submission.dinilai_at)
+
+    def test_pengumpulan_menolak_siswa_tahun_lain(self):
+        tahun_lain = AcademicYear.objects.create(tahun='2027/2028')
+        kelas_lain = ClassGroup.objects.create(
+            academic_year=tahun_lain, tingkat='VIII', nama='Lain', fase='D'
+        )
+        siswa_lain = Student.objects.create(
+            class_group=kelas_lain, no_urut=1, nama='Siswa Tahun Lain'
+        )
+        tugas = LearningTask.objects.create(
+            subject=self.mapel, academic_year=self.tahun, judul='Tugas Tahun Ini',
+        )
+        with self.assertRaises(ValidationError):
+            LearningTaskSubmission.objects.create(task=tugas, student=siswa_lain)
+
+    def test_import_export_cp_materi_tugas(self):
+        from . import excel_io
+
+        def berkas(headers, rows):
+            wb = Workbook()
+            ws = wb.active
+            ws.append(headers)
+            for row in rows:
+                ws.append(row)
+            data = BytesIO()
+            wb.save(data)
+            data.seek(0)
+            return data
+
+        # CP
+        hasil = excel_io.import_cp(
+            berkas(excel_io.CP_HEADERS, [
+                ['CP.1', 'D', 'memahami bilangan bulat', '', 'Aktif'],
+            ]),
+            self.mapel,
+        )
+        self.assertEqual(hasil['dibuat'], 1)
+        cp = LearningOutcome.objects.get(subject=self.mapel, kode='CP.1')
+
+        # TP dengan tautan CP (kolom baru di akhir)
+        hasil = excel_io.import_tp(
+            berkas(excel_io.TP_HEADERS, [
+                [10, 'menjelaskan bilangan', '', 'Aktif', 'TP.10', 'CP.1'],
+            ]),
+            self.mapel, self.tahun,
+        )
+        self.assertEqual(hasil['dibuat'], 1)
+
+        # Materi
+        hasil = excel_io.import_materi(
+            berkas(excel_io.MATERI_HEADERS, [
+                ['M.1', 'Bilangan Bulat', 'Materi', '10', '', 'Aktif'],
+            ]),
+            self.mapel,
+        )
+        self.assertEqual(hasil['dibuat'], 1)
+        materi = LearningMaterial.objects.get(subject=self.mapel, kode='M.1')
+        self.assertEqual(materi.objectives.count(), 1)
+
+        # Tugas
+        hasil = excel_io.import_tugas(
+            berkas(excel_io.TUGAS_HEADERS, [
+                ['Tugas Excel', 'Deskripsi', 'Instruksi', '2026-11-20',
+                 '2026-11-27', '15', 'Terbit', '10', self.kelas.nama_lengkap],
+            ]),
+            self.mapel,
+        )
+        self.assertEqual(hasil['dibuat'], 1)
+        tugas = LearningTask.objects.get(subject=self.mapel, judul='Tugas Excel')
+        self.assertEqual(tugas.status, 'TERBIT')
+        self.assertEqual(tugas.objectives.count(), 1)
+        self.assertEqual(tugas.class_groups.get(), self.kelas)
+
+        for respons in (
+            excel_io.export_cp(self.mapel, template=True),
+            excel_io.export_materi(self.mapel, template=True),
+            excel_io.export_tugas(self.mapel, template=True),
+        ):
+            self.assertEqual(respons.status_code, 200)
+            self.assertTrue(respons.content)
+
+    def test_halaman_impor_ekspor_pembelajaran(self):
+        from . import excel_io
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(excel_io.CP_HEADERS)
+        ws.append(['CP.9', 'D', 'capaian dari halaman impor', '', 'Aktif'])
+        data = BytesIO()
+        wb.save(data)
+        unggah = SimpleUploadedFile(
+            'cp.xlsx', data.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response = self.client.post(
+            reverse('akademik:impor', args=['cp']) + f'?mapel={self.mapel.id}',
+            {'file': unggah},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            LearningOutcome.objects.filter(subject=self.mapel, kode='CP.9').exists()
+        )
+        for kind in ('cp', 'materi', 'tugas'):
+            with self.subTest(kind=kind):
+                self.assertEqual(
+                    self.client.get(
+                        reverse('akademik:ekspor', args=[kind])
+                        + f'?mapel={self.mapel.id}'
+                    ).status_code,
+                    200,
+                )
+                self.assertEqual(
+                    self.client.get(
+                        reverse('akademik:impor', args=[kind])
+                        + f'?mapel={self.mapel.id}'
+                    ).status_code,
+                    200,
+                )
+
+    def test_semua_halaman_pembelajaran_dapat_dibuka(self):
+        cp = LearningOutcome.objects.create(
+            subject=self.mapel, kode='CP.1', deskripsi='CP uji',
+        )
+        materi = LearningMaterial.objects.create(
+            subject=self.mapel, judul='Materi uji',
+        )
+        tugas = LearningTask.objects.create(
+            subject=self.mapel, academic_year=self.tahun, judul='Tugas uji',
+        )
+        urls = [
+            reverse('akademik:cp_menu'),
+            reverse('akademik:cp_list', args=[self.mapel.id]),
+            reverse('akademik:cp_tambah'),
+            reverse('akademik:cp_ubah', args=[cp.id]),
+            reverse('akademik:materi_menu'),
+            reverse('akademik:materi_list', args=[self.mapel.id]),
+            reverse('akademik:materi_tambah'),
+            reverse('akademik:materi_ubah', args=[materi.id]),
+            reverse('akademik:tugas_pembelajaran_list'),
+            reverse('akademik:tugas_pembelajaran_list', args=[self.mapel.id]),
+            reverse('akademik:tugas_pembelajaran_tambah'),
+            reverse('akademik:tugas_pembelajaran_ubah', args=[tugas.id]),
+            reverse('akademik:tugas_pembelajaran_detail', args=[tugas.id]),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+
+class Tahap4AsesmenTest(RaporTestBase):
+    """Tahap 4: asesmen generik, sinkronisasi nilai, dan konfigurasi nilai."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('admin_tahap4', 't4@uji.id', 'rahasia123')
+        self.client.force_login(self.admin)
+        self.guru = Teacher.objects.create(nama='Guru Tahap Empat')
+        TeachingAssignment.objects.create(
+            teacher=self.guru, subject=self.mapel, class_group=self.kelas,
+            academic_year=self.tahun,
+        )
+
+    def test_sinyal_nilai_lama_membuat_asesmen_generik(self):
+        FormativeScore.objects.create(
+            student=self.siswa, objective=self.tp1, semester=self.semester, nilai=4,
+        )
+        self.assertTrue(
+            Assessment.objects.filter(
+                subject=self.mapel, semester=self.semester, kategori='FORMATIF'
+            ).exists()
+        )
+        self.assertTrue(
+            AssessmentResult.objects.filter(
+                student=self.siswa,
+                component__assessment__kategori='FORMATIF',
+                nilai=4,
+            ).exists()
+        )
+
+        SummativeLM.objects.create(
+            student=self.siswa, subject=self.mapel, semester=self.semester,
+            nomor=1, nilai=Decimal('90'),
+        )
+        SummativeScore.objects.create(
+            student=self.siswa, subject=self.mapel, semester=self.semester,
+            sts=Decimal('80'), sas_non_tes=Decimal('90'), sas_tes=Decimal('100'),
+        )
+        kategori = set(
+            AssessmentResult.objects.filter(
+                student=self.siswa
+            ).values_list('component__assessment__kategori', flat=True)
+        )
+        self.assertTrue({'FORMATIF', 'SUMATIF_LM', 'STS', 'SAS'} <= kategori)
+
+    def test_simpan_ulang_tidak_membuat_result_ganda(self):
+        score = FormativeScore.objects.create(
+            student=self.siswa, objective=self.tp1, semester=self.semester, nilai=3,
+        )
+        score.nilai = 4
+        score.save()
+        hasil = AssessmentResult.objects.filter(
+            student=self.siswa,
+            component__assessment__kategori='FORMATIF',
+        )
+        self.assertEqual(hasil.count(), 1)
+        self.assertEqual(hasil.first().nilai, Decimal('4'))
+
+    def test_hitung_nilai_identik_dengan_rumus_excel(self):
+        for nomor, nilai in [(1, 80), (2, 90), (3, 100)]:
+            SummativeLM.objects.create(
+                student=self.siswa, subject=self.mapel, semester=self.semester,
+                nomor=nomor, nilai=Decimal(nilai),
+            )
+        SummativeScore.objects.create(
+            student=self.siswa, subject=self.mapel, semester=self.semester,
+            sts=Decimal('80'), sas_non_tes=Decimal('90'), sas_tes=Decimal('100'),
+        )
+        hasil = hitung_nilai(self.siswa, self.mapel, self.semester)
+        self.assertEqual(hasil['rata_lm'], Decimal('90'))
+        self.assertEqual(hasil['rata_sas'], Decimal('95'))
+        self.assertEqual(hasil['nilai'], Decimal('88.33'))
+
+        legacy = SummativeScore.objects.get(
+            student=self.siswa, subject=self.mapel, semester=self.semester
+        )
+        self.assertEqual(
+            legacy.nilai_rapor.quantize(Decimal('0.01')), hasil['nilai']
+        )
+
+    def test_komponen_kosong_tidak_dihitung_nol(self):
+        SummativeLM.objects.create(
+            student=self.siswa, subject=self.mapel, semester=self.semester,
+            nomor=1, nilai=Decimal('80'),
+        )
+        hasil = hitung_nilai(self.siswa, self.mapel, self.semester)
+        self.assertEqual(hasil['nilai'], Decimal('80'))
+        self.assertIsNone(hasil['sts'])
+        self.assertIsNone(hasil['rata_sas'])
+
+    def test_konfigurasi_bobot_mengubah_perhitungan(self):
+        GradeConfiguration.objects.create(
+            subject=self.mapel, academic_year=self.tahun,
+            bobot_lm=Decimal('2'), bobot_sts=Decimal('1'), bobot_sas=Decimal('1'),
+            jumlah_desimal=2, metode_pembulatan='HALF_UP',
+        )
+        for nomor, nilai in [(1, 90), (2, 90)]:
+            SummativeLM.objects.create(
+                student=self.siswa, subject=self.mapel, semester=self.semester,
+                nomor=nomor, nilai=Decimal(nilai),
+            )
+        SummativeScore.objects.create(
+            student=self.siswa, subject=self.mapel, semester=self.semester,
+            sts=Decimal('80'), sas_non_tes=Decimal('90'), sas_tes=Decimal('100'),
+        )
+        hasil = hitung_nilai(self.siswa, self.mapel, self.semester)
+        # (2*90 + 1*80 + 1*95) / 4 = 88,75
+        self.assertEqual(hasil['nilai'], Decimal('88.75'))
+
+    def test_ambang_deskripsi_dari_konfigurasi(self):
+        GradeConfiguration.objects.create(
+            subject=self.mapel, academic_year=self.tahun,
+            ambang_unggul=4, ambang_perlu_bimbingan=1,
+        )
+        FormativeScore.objects.create(
+            student=self.siswa, objective=self.tp1, semester=self.semester, nilai=4,
+        )
+        FormativeScore.objects.create(
+            student=self.siswa, objective=self.tp2, semester=self.semester, nilai=2,
+        )
+        hasil = deskripsi_capaian(self.siswa, self.mapel, self.semester)
+        self.assertEqual(hasil['unggul'], self.tp1)
+        self.assertIsNone(hasil['perlu'])
+        self.assertIn('sangat menguasai', hasil['teks'])
+        self.assertNotIn('perlu bimbingan', hasil['teks'])
+
+    def test_hitung_dari_asesmen_generik_tanpa_nilai_lama(self):
+        assessment = Assessment.objects.create(
+            subject=self.mapel, academic_year=self.tahun, semester=self.semester,
+            nama='STS Manual', kategori='STS',
+        )
+        component = AssessmentComponent.objects.create(
+            assessment=assessment, nama='STS', tipe='TES', nilai_maksimal=100,
+        )
+        AssessmentResult.objects.create(
+            student=self.siswa, component=component, nilai=Decimal('77'),
+        )
+        hasil = hitung_nilai(self.siswa, self.mapel, self.semester)
+        self.assertEqual(hasil['sts'], Decimal('77'))
+        self.assertEqual(hasil['nilai'], Decimal('77'))
+
+    def test_api_autosave_validasi_dan_tanpa_duplikat(self):
+        assessment = Assessment.objects.create(
+            subject=self.mapel, academic_year=self.tahun, semester=self.semester,
+            nama='Asesmen API', kategori='SUMATIF_LM',
+        )
+        component = AssessmentComponent.objects.create(
+            assessment=assessment, nama='Nilai', tipe='NILAI', nilai_maksimal=100,
+        )
+        url = reverse('akademik:asesmen_simpan', args=[assessment.id])
+        kirim = self.client.post(
+            url,
+            data=json.dumps({
+                'student': self.siswa.id, 'component': component.id, 'nilai': '85',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(kirim.status_code, 200)
+        self.assertTrue(
+            AssessmentResult.objects.filter(
+                student=self.siswa, component=component, nilai=Decimal('85')
+            ).exists()
+        )
+
+        self.client.post(
+            url,
+            data=json.dumps({
+                'student': self.siswa.id, 'component': component.id, 'nilai': '90',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(
+            AssessmentResult.objects.filter(student=self.siswa, component=component).count(),
+            1,
+        )
+        self.assertEqual(
+            AssessmentResult.objects.get(student=self.siswa, component=component).nilai,
+            Decimal('90'),
+        )
+
+        gagal = self.client.post(
+            url,
+            data=json.dumps({
+                'student': self.siswa.id, 'component': component.id, 'nilai': '101',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(gagal.status_code, 400)
+        self.assertEqual(
+            AssessmentResult.objects.get(student=self.siswa, component=component).nilai,
+            Decimal('90'),
+        )
+
+    def test_form_asesmen_menyimpan_komponen(self):
+        data = {
+            'subject': self.mapel.id,
+            'class_group': '',
+            'nama': 'Asesmen Baru',
+            'kategori': 'SUMATIF_LM',
+            'metode': 'TES',
+            'tanggal': '',
+            'bobot': '100',
+            'deskripsi': '',
+            'status': 'DRAF',
+            'components-TOTAL_FORMS': '1',
+            'components-INITIAL_FORMS': '0',
+            'components-MIN_NUM_FORMS': '0',
+            'components-MAX_NUM_FORMS': '1000',
+            'components-0-nama': 'Nilai',
+            'components-0-tipe': 'NILAI',
+            'components-0-urutan': '1',
+            'components-0-bobot': '100',
+            'components-0-nilai_maksimal': '100',
+            'components-0-wajib': 'on',
+        }
+        response = self.client.post(reverse('akademik:asesmen_tambah'), data)
+        self.assertEqual(response.status_code, 302)
+        assessment = Assessment.objects.get(nama='Asesmen Baru')
+        self.assertEqual(assessment.semester, self.semester)
+        self.assertEqual(assessment.components.count(), 1)
+
+    def test_halaman_dan_ekspor_impor_asesmen(self):
+        assessment = Assessment.objects.create(
+            subject=self.mapel, academic_year=self.tahun, semester=self.semester,
+            nama='Asesmen Halaman', kategori='SUMATIF_LM', status='TERBIT',
+        )
+        component = AssessmentComponent.objects.create(
+            assessment=assessment, nama='Nilai', tipe='NILAI', nilai_maksimal=100,
+        )
+        urls = [
+            reverse('akademik:asesmen_list'),
+            reverse('akademik:asesmen_tambah'),
+            reverse('akademik:asesmen_ubah', args=[assessment.id]),
+            reverse('akademik:asesmen_grid', args=[assessment.id]),
+            reverse('akademik:asesmen_impor', args=[assessment.id]),
+            reverse('akademik:asesmen_ekspor', args=[assessment.id]),
+            reverse('akademik:konfigurasi_nilai'),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+        from . import excel_io
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(['No', 'NIS', 'NISN', 'Nama Peserta Didik', 'Nilai'])
+        ws.append([1, self.siswa.nis, self.siswa.nisn, self.siswa.nama, 88])
+        data = BytesIO()
+        wb.save(data)
+        data.seek(0)
+        hasil = excel_io.import_asesmen(data, assessment, self.kelas)
+        self.assertEqual(hasil['diperbarui'], 1)
+        self.assertEqual(
+            AssessmentResult.objects.get(student=self.siswa, component=component).nilai,
+            Decimal('88'),
+        )
+        ekspor = excel_io.export_asesmen(assessment, self.kelas)
+        self.assertEqual(ekspor.status_code, 200)
+        self.assertTrue(ekspor.content)
+
+    def test_konfigurasi_nilai_menolak_ambang_tidak_logis(self):
+        response = self.client.post(reverse('akademik:konfigurasi_nilai'), {
+            'bobot_lm': '1', 'bobot_sts': '1', 'bobot_sas': '1',
+            'bobot_sas_non_tes': '1', 'bobot_sas_tes': '1',
+            'metode_pembulatan': 'HALF_UP', 'jumlah_desimal': '2',
+            'nilai_min': '0', 'nilai_max': '100',
+            'ambang_unggul': '2', 'ambang_perlu_bimbingan': '2', 'aktif': 'on',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ambang perlu bimbingan harus lebih kecil')
+
+    def test_hapus_mapel_dengan_nilai_tidak_menimbulkan_error(self):
+        FormativeScore.objects.create(
+            student=self.siswa, objective=self.tp1, semester=self.semester, nilai=3,
+        )
+        SummativeLM.objects.create(
+            student=self.siswa, subject=self.mapel, semester=self.semester,
+            nomor=1, nilai=Decimal('80'),
+        )
+        SummativeScore.objects.create(
+            student=self.siswa, subject=self.mapel, semester=self.semester,
+            sts=Decimal('80'),
+        )
+        self.mapel.delete()
+        self.assertFalse(Assessment.objects.filter(nama__contains='TP 1').exists())

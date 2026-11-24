@@ -1,0 +1,62 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if cp %}Ubah CP{% else %}Tambah CP{% endif %}{% endblock %}
+{% block topbar %}{% if cp %}Ubah Capaian Pembelajaran{% else %}Tambah Capaian Pembelajaran{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:cp_menu' %}">Capaian Pembelajaran</a>
+  <span>/</span>
+  <span>{% if cp %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if cp %}{{ cp.kode|default:"CP" }} — {{ cp.subject.nama }}{% else %}Capaian Pembelajaran Baru{% endif %}</h2>
+    <p>Tahun pelajaran {{ tahun.tahun|default:"-" }}. CP menjadi acuan penyusunan tujuan pembelajaran.</p>
+  </div>
+</div>
+
+<div style="max-width:820px">
+  <form method="post" id="form-cp" novalidate>
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Data Capaian Pembelajaran</h3></div>
+      <div class="panel-body">
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.subject.id_for_label }}">Mata Pelajaran</label>
+            {{ form.subject }}{{ form.subject.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.kode.id_for_label }}">Kode CP</label>
+            {{ form.kode }}{{ form.kode.errors }}
+            <div class="help">{{ form.kode.help_text }}</div>
+          </div>
+          <div class="field">
+            <label for="{{ form.fase.id_for_label }}">Fase</label>
+            {{ form.fase }}{{ form.fase.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.urutan.id_for_label }}">Urutan</label>
+            {{ form.urutan }}{{ form.urutan.errors }}
+            <div class="help">{{ form.urutan.help_text }}</div>
+          </div>
+          <div class="field full">
+            <label for="{{ form.deskripsi.id_for_label }}">Capaian Pembelajaran</label>
+            {{ form.deskripsi }}{{ form.deskripsi.errors }}
+            <div class="help">{{ form.deskripsi.help_text }}</div>
+          </div>
+          <div class="field">
+            <label for="{{ form.aktif.id_for_label }}">Status</label>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">{{ form.aktif }} Aktif</label>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:20px">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan CP</button>
+          <a class="btn" href="{% url 'akademik:cp_menu' %}{% if cp %}?mapel={{ cp.subject_id }}{% endif %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

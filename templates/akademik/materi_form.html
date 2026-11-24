@@ -1,0 +1,65 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if materi %}Ubah Materi{% else %}Tambah Materi{% endif %}{% endblock %}
+{% block topbar %}{% if materi %}Ubah Materi{% else %}Tambah Materi{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:materi_menu' %}">Materi Pembelajaran</a>
+  <span>/</span>
+  <span>{% if materi %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if materi %}{{ materi.judul }}{% else %}Materi Pembelajaran Baru{% endif %}</h2>
+    <p>Tahun pelajaran {{ tahun.tahun|default:"-" }}. Hubungkan materi dengan satu atau beberapa TP.</p>
+  </div>
+</div>
+
+<div style="max-width:860px">
+  <form method="post" id="form-materi" novalidate>
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Data Materi</h3></div>
+      <div class="panel-body">
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.subject.id_for_label }}">Mata Pelajaran</label>
+            {{ form.subject }}{{ form.subject.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.kode.id_for_label }}">Kode Materi</label>
+            {{ form.kode }}{{ form.kode.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.judul.id_for_label }}">Judul Materi</label>
+            {{ form.judul }}{{ form.judul.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.deskripsi.id_for_label }}">Deskripsi</label>
+            {{ form.deskripsi }}{{ form.deskripsi.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.objectives.id_for_label }}">Tujuan Pembelajaran Terkait</label>
+            {{ form.objectives }}{{ form.objectives.errors }}
+            <div class="help">{{ form.objectives.help_text }}</div>
+          </div>
+          <div class="field">
+            <label for="{{ form.urutan.id_for_label }}">Urutan</label>
+            {{ form.urutan }}{{ form.urutan.errors }}
+            <div class="help">{{ form.urutan.help_text }}</div>
+          </div>
+          <div class="field">
+            <label for="{{ form.aktif.id_for_label }}">Status</label>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">{{ form.aktif }} Aktif</label>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:20px">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Materi</button>
+          <a class="btn" href="{% url 'akademik:materi_menu' %}{% if materi %}?mapel={{ materi.subject_id }}{% endif %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -91,7 +91,9 @@
       </div>
       <div>
         <div class="section-title" style="margin-top:0">Kelas</div>
-        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+        <div style="display:flex;justify-content:flex-end;gap:5px;margin-bottom:8px">
+          <a class="btn btn-sm" href="{% url 'akademik:ekspor' 'kelas' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+          <a class="btn btn-sm" href="{% url 'akademik:impor' 'kelas' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
           <a class="btn btn-sm" href="{% url 'akademik:kelas_tambah' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-plus"/></svg> Kelas</a>
         </div>
         <table class="data">

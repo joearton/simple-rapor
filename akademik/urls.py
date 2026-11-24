@@ -60,11 +60,36 @@ urlpatterns = [
     path('tp/<int:pk>/ubah/', views.tugas_form, name='tp_ubah'),
     path('tp/<int:subject_id>/', views.tugas_list, name='tp_list'),
 
+    path('cp/', views.cp_list, name='cp_menu'),
+    path('cp/tambah/', views.cp_form, name='cp_tambah'),
+    path('cp/<int:pk>/ubah/', views.cp_form, name='cp_ubah'),
+    path('cp/<int:subject_id>/', views.cp_list, name='cp_list'),
+
+    path('materi/', views.materi_list, name='materi_menu'),
+    path('materi/tambah/', views.materi_form, name='materi_tambah'),
+    path('materi/<int:pk>/ubah/', views.materi_form, name='materi_ubah'),
+    path('materi/<int:subject_id>/', views.materi_list, name='materi_list'),
+
+    path('tugas/', views.tugas_pembelajaran_list, name='tugas_pembelajaran_list'),
+    path('tugas/tambah/', views.tugas_pembelajaran_form, name='tugas_pembelajaran_tambah'),
+    path('tugas/<int:pk>/ubah/', views.tugas_pembelajaran_form, name='tugas_pembelajaran_ubah'),
+    path('tugas/<int:pk>/kumpulan/', views.tugas_pembelajaran_detail, name='tugas_pembelajaran_detail'),
+    path('tugas/<int:subject_id>/', views.tugas_pembelajaran_list, name='tugas_pembelajaran_list'),
+
     path('formatif/', views.evaluasi_formatif_list, name='formatif_menu'),
     path('formatif/tambah/', views.evaluasi_formatif_form, name='formatif_evaluasi_tambah'),
     path('formatif/<int:pk>/ubah/', views.evaluasi_formatif_form, name='formatif_evaluasi_ubah'),
     path('formatif/<int:pk>/hapus/', views.evaluasi_formatif_hapus, name='formatif_evaluasi_hapus'),
     path('formatif/<int:subject_id>/nilai/', views.formatif_entry, name='formatif_entry'),
+
+    path('asesmen/', views.asesmen_list, name='asesmen_list'),
+    path('asesmen/tambah/', views.asesmen_form, name='asesmen_tambah'),
+    path('asesmen/<int:pk>/ubah/', views.asesmen_form, name='asesmen_ubah'),
+    path('asesmen/<int:pk>/nilai/', views.asesmen_grid, name='asesmen_grid'),
+    path('asesmen/<int:pk>/simpan/', views.asesmen_simpan, name='asesmen_simpan'),
+    path('asesmen/<int:pk>/ekspor/', views.asesmen_ekspor, name='asesmen_ekspor'),
+    path('asesmen/<int:pk>/impor/', views.asesmen_impor, name='asesmen_impor'),
+    path('konfigurasi-nilai/', views.konfigurasi_nilai_view, name='konfigurasi_nilai'),
 
     path('sumatif/', views.evaluasi_sumatif_list, name='sumatif_menu'),
     path('sumatif/tambah/', views.evaluasi_sumatif_form, name='sumatif_evaluasi_tambah'),

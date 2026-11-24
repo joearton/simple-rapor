@@ -3,19 +3,43 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm, SetPasswordForm
 from django.contrib.auth.models import Group, User
 from django.db.models import Q
+from django.forms import inlineformset_factory
 
 from .models import (
     AcademicYear,
+    Assessment,
+    AssessmentComponent,
     ClassGroup,
     EvaluasiFormatif,
     EvaluasiSumatif,
+    Grade,
+    GradeConfiguration,
+    LearningMaterial,
     LearningObjective,
+    LearningOutcome,
+    LearningTask,
     School,
     Semester,
     Student,
     Subject,
     Teacher,
 )
+
+
+def _pilihan_tingkat():
+    """Pilihan tingkat kelas dari master Grade (fallback bila belum diisi)."""
+    pilihan = [(g.nama, g.nama) for g in Grade.objects.all()]
+    return pilihan or [('VII', 'VII'), ('VIII', 'VIII'), ('IX', 'IX')]
+
+
+def _grade_dari_tingkat(tingkat, fase='D'):
+    if not tingkat:
+        return None
+    grade, _ = Grade.objects.get_or_create(
+        nama=tingkat,
+        defaults={'fase': fase or 'D', 'urutan': 0},
+    )
+    return grade
 
 
 def _pasang_class(form):
@@ -117,11 +141,19 @@ class KelasForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['tingkat'] = forms.ChoiceField(
+            label='Tingkat',
+            choices=_pilihan_tingkat(),
+            help_text='Pilih tingkat kelas (master Tingkat Kelas).',
+        )
         self.fields['wali_kelas_guru'].queryset = Teacher.objects.filter(aktif=True)
         _pasang_class(self)
 
     def save(self, commit=True):
         obj = super().save(commit=False)
+        obj.grade = _grade_dari_tingkat(
+            self.cleaned_data.get('tingkat'), self.cleaned_data.get('fase')
+        )
         if obj.wali_kelas_guru_id:
             guru = obj.wali_kelas_guru
             obj.wali_kelas = guru.nama
@@ -163,11 +195,19 @@ class ClassGroupForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['tingkat'] = forms.ChoiceField(
+            label='Tingkat',
+            choices=_pilihan_tingkat(),
+            help_text='Pilih tingkat kelas (master Tingkat Kelas).',
+        )
         _pasang_class(self)
         self.fields['wali_kelas_guru'].queryset = Teacher.objects.filter(aktif=True)
 
     def save(self, commit=True):
         obj = super().save(commit=False)
+        obj.grade = _grade_dari_tingkat(
+            self.cleaned_data.get('tingkat'), self.cleaned_data.get('fase')
+        )
         if obj.wali_kelas_guru_id:
             guru = obj.wali_kelas_guru
             obj.wali_kelas = guru.nama
@@ -426,7 +466,7 @@ class UserForm(forms.ModelForm):
 class TujuanPembelajaranForm(forms.ModelForm):
     class Meta:
         model = LearningObjective
-        fields = ['subject', 'nomor', 'deskripsi', 'guru', 'aktif']
+        fields = ['subject', 'learning_outcome', 'kode', 'nomor', 'deskripsi', 'guru', 'aktif']
         widgets = {
             'deskripsi': forms.Textarea(attrs={'rows': 4}),
         }
@@ -436,7 +476,133 @@ class TujuanPembelajaranForm(forms.ModelForm):
         _pasang_class(self)
         self.fields['nomor'].required = False
         self.fields['nomor'].help_text = 'Kosongkan untuk melanjutkan nomor otomatis.'
+        self.fields['kode'].help_text = 'Opsional, misalnya TP.1 atau 7.1.'
+        self.fields['learning_outcome'].help_text = (
+            'Opsional. Pilih CP yang menjadi acuan TP ini.'
+        )
         self.fields['guru'].queryset = Teacher.objects.filter(aktif=True)
+
+    def clean(self):
+        cleaned = super().clean()
+        subject = cleaned.get('subject')
+        cp = cleaned.get('learning_outcome')
+        if subject and cp and cp.subject_id != subject.id:
+            self.add_error(
+                'learning_outcome',
+                'CP harus berasal dari mata pelajaran yang sama.',
+            )
+        return cleaned
+
+
+class CapaianPembelajaranForm(forms.ModelForm):
+    class Meta:
+        model = LearningOutcome
+        fields = ['subject', 'kode', 'fase', 'deskripsi', 'urutan', 'aktif']
+        widgets = {
+            'deskripsi': forms.Textarea(attrs={'rows': 5}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+        self.fields['urutan'].required = False
+        self.fields['urutan'].help_text = 'Kosongkan untuk melanjutkan urutan otomatis.'
+        self.fields['kode'].help_text = 'Opsional, misalnya CP.1.'
+        self.fields['deskripsi'].help_text = (
+            'Tulis capaian pembelajaran sesuai fase, tanpa titik di akhir.'
+        )
+
+
+class MateriPembelajaranForm(forms.ModelForm):
+    class Meta:
+        model = LearningMaterial
+        fields = [
+            'subject', 'objectives', 'kode', 'judul', 'deskripsi', 'urutan', 'aktif',
+        ]
+        widgets = {
+            'deskripsi': forms.Textarea(attrs={'rows': 4}),
+            'objectives': forms.CheckboxSelectMultiple(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+        self.fields['urutan'].required = False
+        self.fields['urutan'].help_text = 'Kosongkan untuk melanjutkan urutan otomatis.'
+        self.fields['objectives'].help_text = 'Pilih satu atau beberapa TP yang dicakup materi ini.'
+
+    def clean(self):
+        cleaned = super().clean()
+        subject = cleaned.get('subject')
+        objectives = cleaned.get('objectives')
+        if subject and objectives:
+            salah = objectives.exclude(subject=subject)
+            if salah.exists():
+                self.add_error(
+                    'objectives',
+                    'Semua TP harus berasal dari mata pelajaran yang sama.',
+                )
+        return cleaned
+
+
+class TugasPembelajaranForm(forms.ModelForm):
+    class Meta:
+        model = LearningTask
+        fields = [
+            'subject', 'class_groups', 'objectives', 'judul', 'deskripsi',
+            'instruksi', 'tanggal_pemberian', 'batas_pengumpulan', 'lampiran',
+            'bobot', 'status',
+        ]
+        widgets = {
+            'deskripsi': forms.Textarea(attrs={'rows': 3}),
+            'instruksi': forms.Textarea(attrs={'rows': 4}),
+            'tanggal_pemberian': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'batas_pengumpulan': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'class_groups': forms.CheckboxSelectMultiple(),
+            'objectives': forms.CheckboxSelectMultiple(),
+            'lampiran': forms.ClearableFileInput(attrs={'accept': '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.jpg,.jpeg,.png'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+        self.fields['class_groups'].help_text = 'Pilih kelas yang mengerjakan tugas ini.'
+        self.fields['objectives'].help_text = 'Pilih TP yang menjadi acuan tugas.'
+        self.fields['lampiran'].help_text = 'Opsional, maksimal 10 MB.'
+
+    def clean_lampiran(self):
+        lampiran = self.cleaned_data.get('lampiran')
+        if lampiran and hasattr(lampiran, 'size') and lampiran.size > 10 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran lampiran maksimal 10 MB.')
+        return lampiran
+
+    def clean(self):
+        cleaned = super().clean()
+        subject = cleaned.get('subject')
+        objectives = cleaned.get('objectives')
+        class_groups = cleaned.get('class_groups')
+        awal = cleaned.get('tanggal_pemberian')
+        akhir = cleaned.get('batas_pengumpulan')
+        if subject and objectives:
+            salah = objectives.exclude(subject=subject)
+            if salah.exists():
+                self.add_error(
+                    'objectives',
+                    'Semua TP harus berasal dari mata pelajaran yang sama.',
+                )
+        if subject and class_groups:
+            salah = class_groups.exclude(academic_year=subject.academic_year)
+            if salah.exists():
+                self.add_error(
+                    'class_groups',
+                    'Semua kelas harus berada pada tahun pelajaran mapel ini.',
+                )
+        if awal and akhir and akhir < awal:
+            self.add_error(
+                'batas_pengumpulan',
+                'Batas pengumpulan tidak boleh sebelum tanggal pemberian.',
+            )
+        return cleaned
 
 
 
@@ -479,3 +645,105 @@ class EvaluasiSumatifForm(forms.ModelForm):
         if bobot is not None and (bobot < 0 or bobot > 100):
             raise forms.ValidationError('Bobot harus antara 0 dan 100.')
         return bobot
+
+
+class AssessmentForm(forms.ModelForm):
+    class Meta:
+        model = Assessment
+        fields = [
+            'subject', 'class_group', 'nama', 'kategori', 'metode', 'tanggal',
+            'bobot', 'deskripsi', 'status',
+        ]
+        widgets = {
+            'tanggal': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'deskripsi': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+        self.fields['class_group'].help_text = (
+            'Opsional. Kosongkan jika asesmen berlaku untuk semua kelas.'
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        subject = cleaned.get('subject')
+        kelas = cleaned.get('class_group')
+        if subject and kelas:
+            if kelas.academic_year_id != subject.academic_year_id:
+                self.add_error(
+                    'class_group', 'Kelas harus berada pada tahun pelajaran mapel.'
+                )
+        return cleaned
+
+
+class AssessmentComponentForm(forms.ModelForm):
+    class Meta:
+        model = AssessmentComponent
+        fields = [
+            'nama', 'tipe', 'urutan', 'bobot', 'nilai_maksimal', 'wajib',
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+
+
+AssessmentComponentFormSet = inlineformset_factory(
+    Assessment,
+    AssessmentComponent,
+    form=AssessmentComponentForm,
+    extra=1,
+    can_delete=True,
+    min_num=0,
+    validate_min=False,
+)
+
+
+class GradeConfigurationForm(forms.ModelForm):
+    class Meta:
+        model = GradeConfiguration
+        fields = [
+            'bobot_lm', 'bobot_sts', 'bobot_sas', 'bobot_sas_non_tes',
+            'bobot_sas_tes', 'metode_pembulatan', 'jumlah_desimal',
+            'nilai_min', 'nilai_max', 'ambang_unggul',
+            'ambang_perlu_bimbingan', 'aktif',
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _pasang_class(self)
+        self.fields['aktif'].help_text = 'Gunakan konfigurasi ini untuk perhitungan.'
+
+    def clean(self):
+        cleaned = super().clean()
+        desimal = cleaned.get('jumlah_desimal')
+        minimum = cleaned.get('nilai_min')
+        maksimum = cleaned.get('nilai_max')
+        unggul = cleaned.get('ambang_unggul')
+        perlu = cleaned.get('ambang_perlu_bimbingan')
+        if desimal is not None and (desimal < 0 or desimal > 4):
+            self.add_error('jumlah_desimal', 'Jumlah desimal harus 0-4.')
+        if minimum is not None and maksimum is not None and minimum >= maksimum:
+            self.add_error('nilai_max', 'Nilai maksimum harus lebih besar dari minimum.')
+        if unggul is not None and perlu is not None and perlu >= unggul:
+            self.add_error(
+                'ambang_perlu_bimbingan',
+                'Ambang perlu bimbingan harus lebih kecil dari ambang unggul.',
+            )
+        for name in ('bobot_lm', 'bobot_sts', 'bobot_sas'):
+            bobot = cleaned.get(name)
+            if bobot is not None and bobot < 0:
+                self.add_error(name, 'Bobot tidak boleh negatif.')
+        total = sum(
+            bobot for bobot in (
+                cleaned.get('bobot_lm'), cleaned.get('bobot_sts'),
+                cleaned.get('bobot_sas'),
+            ) if bobot is not None
+        )
+        if total is not None and total <= 0:
+            self.add_error(
+                'bobot_lm', 'Minimal salah satu bobot LM/STS/SAS harus lebih dari 0.'
+            )
+        return cleaned

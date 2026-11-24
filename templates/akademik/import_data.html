@@ -49,6 +49,8 @@
       </ul>
       {% if subject %}
       <div class="note-box" style="margin-top:14px">Mata pelajaran: <strong>{{ subject.nama }}</strong><br>Semester: <strong>{{ semester.nama }} {{ semester.academic_year.tahun }}</strong></div>
+      {% elif kind == 'kelas' and tahun %}
+      <div class="note-box" style="margin-top:14px">Tahun pelajaran: <strong>{{ tahun.tahun }}</strong></div>
       {% endif %}
     </div>
   </div>

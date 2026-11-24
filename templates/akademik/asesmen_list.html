@@ -1,0 +1,94 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Asesmen{% endblock %}
+{% block topbar %}Asesmen{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Asesmen</h2>
+    <p>Asesmen generik semester {{ semester.nama|default:"-" }} {{ semester.academic_year.tahun|default:"" }}. Nilai dihitung dari komponen yang terisi.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'akademik:asesmen_tambah' %}{% if mapel_filter %}?mapel={{ mapel_filter }}{% endif %}"><svg class="icon"><use href="#i-plus"/></svg> Tambah Asesmen</a>
+    <a class="btn" href="{% url 'akademik:konfigurasi_nilai' %}"><svg class="icon"><use href="#i-chart"/></svg> Konfigurasi Nilai</a>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>Daftar Asesmen</h3>
+    <span class="hint">{{ page_obj.paginator.count }} asesmen</span>
+  </div>
+  <form class="filter-bar" id="filter-asesmen-list" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama asesmen...">
+    <select class="form-input" name="mapel">
+      <option value="">Semua mata pelajaran</option>
+      {% for subject in subjects %}
+      <option value="{{ subject.id }}" {% if mapel_filter == subject.id|stringformat:'s' %}selected{% endif %}>{{ subject.nama }}</option>
+      {% endfor %}
+    </select>
+    <select class="form-input" name="kategori">
+      <option value="">Semua kategori</option>
+      {% for value, label in kategori_choices %}
+      <option value="{{ value }}" {% if kategori_filter == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select class="form-input" name="status">
+      <option value="">Semua status</option>
+      <option value="DRAF" {% if status_filter == 'DRAF' %}selected{% endif %}>Draf</option>
+      <option value="TERBIT" {% if status_filter == 'TERBIT' %}selected{% endif %}>Terbit</option>
+      <option value="TUTUP" {% if status_filter == 'TUTUP' %}selected{% endif %}>Ditutup</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+  <div class="table-wrap">
+    <table class="data" id="table-asesmen-list">
+      <thead>
+        <tr>
+          <th>Nama Asesmen</th>
+          <th>Mata Pelajaran</th>
+          <th>Kategori</th>
+          <th>Kelas</th>
+          <th class="num">Komponen</th>
+          <th class="num">Status</th>
+          <th style="width:190px">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for asesmen in rows %}
+        <tr>
+          <td>
+            <strong>{{ asesmen.nama }}</strong>
+            {% if asesmen.tanggal %}<span class="sub">{{ asesmen.tanggal|date:"d/m/Y" }}</span>{% endif %}
+          </td>
+          <td>{{ asesmen.subject.nama }}</td>
+          <td>{{ asesmen.get_kategori_display }}</td>
+          <td>{{ asesmen.class_group.nama_lengkap|default:"Semua kelas" }}</td>
+          <td class="num">{{ asesmen.components.all|length }}</td>
+          <td class="num">
+            {% if asesmen.status == 'TERBIT' %}<span class="badge badge-green">Terbit</span>
+            {% elif asesmen.status == 'TUTUP' %}<span class="badge badge-gray">Ditutup</span>
+            {% else %}<span class="badge" style="background:#fdf3dd;color:#8a6410">Draf</span>{% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <a class="btn btn-sm" href="{% url 'akademik:asesmen_grid' asesmen.id %}">Nilai</a>
+              <a class="btn btn-sm" href="{% url 'akademik:asesmen_ubah' asesmen.id %}"><svg class="icon"><use href="#i-edit"/></svg></a>
+              <form method="post" action="{% querystring %}" class="inline-form" onsubmit="return confirm('Hapus/arsipkan asesmen ini?');">
+                {% csrf_token %}
+                <input type="hidden" name="asesmen_id" value="{{ asesmen.id }}">
+                <button class="btn btn-sm btn-danger" name="aksi" value="hapus"><svg class="icon"><use href="#i-trash"/></svg></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="empty"><strong>Belum ada asesmen</strong>Tambahkan asesmen atau gunakan halaman formatif/sumatif lama.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'akademik/_pagination.html' %}
+</div>
+{% endblock %}

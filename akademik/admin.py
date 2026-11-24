@@ -2,17 +2,29 @@ from django.contrib import admin
 
 from .models import (
     AcademicYear,
+    Assessment,
+    AssessmentComponent,
+    AssessmentObjective,
+    AssessmentResult,
+    AssessmentRubric,
     AuditLog,
     ClassGroup,
     EvaluasiFormatif,
     EvaluasiSumatif,
     Extracurricular,
     FormativeScore,
+    Grade,
+    GradeConfiguration,
     HomeroomNote,
+    LearningMaterial,
     LearningObjective,
+    LearningOutcome,
+    LearningTask,
+    LearningTaskSubmission,
     School,
     Semester,
     Student,
+    StudentEnrollment,
     Subject,
     SummativeLM,
     SummativeScore,
@@ -24,6 +36,12 @@ from .models import (
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
     list_display = ('nama', 'kepala_sekolah', 'kecamatan')
+
+
+@admin.register(Grade)
+class GradeAdmin(admin.ModelAdmin):
+    list_display = ('nama', 'fase', 'urutan', 'aktif')
+    list_editable = ('fase', 'urutan', 'aktif')
 
 
 @admin.register(AcademicYear)
@@ -46,8 +64,16 @@ class TeacherAdmin(admin.ModelAdmin):
 
 @admin.register(ClassGroup)
 class ClassGroupAdmin(admin.ModelAdmin):
-    list_display = ('tingkat', 'nama', 'fase', 'nama_wali', 'academic_year')
-    list_filter = ('academic_year',)
+    list_display = ('grade', 'nama', 'fase', 'nama_wali', 'academic_year')
+    list_filter = ('academic_year', 'grade')
+    exclude = ('tingkat',)
+
+
+@admin.register(StudentEnrollment)
+class StudentEnrollmentAdmin(admin.ModelAdmin):
+    list_display = ('student', 'class_group', 'academic_year', 'status')
+    list_filter = ('academic_year', 'class_group', 'status')
+    search_fields = ('student__nama', 'student__nis', 'student__nisn')
 
 
 class LearningObjectiveInline(admin.TabularInline):
@@ -65,8 +91,8 @@ class SubjectAdmin(admin.ModelAdmin):
 
 @admin.register(TeachingAssignment)
 class TeachingAssignmentAdmin(admin.ModelAdmin):
-    list_display = ('subject', 'teacher', 'class_group', 'academic_year')
-    list_filter = ('academic_year', 'class_group', 'teacher')
+    list_display = ('subject', 'teacher', 'class_group', 'academic_year', 'semester')
+    list_filter = ('academic_year', 'semester', 'class_group', 'teacher')
     search_fields = ('subject__nama', 'teacher__nama')
 
 
@@ -80,9 +106,39 @@ class StudentAdmin(admin.ModelAdmin):
 
 @admin.register(LearningObjective)
 class LearningObjectiveAdmin(admin.ModelAdmin):
-    list_display = ('subject', 'academic_year', 'nomor', 'guru', 'aktif', 'deskripsi')
+    list_display = ('subject', 'academic_year', 'nomor', 'kode', 'guru', 'aktif', 'deskripsi')
     list_filter = ('subject', 'academic_year', 'aktif', 'guru')
-    search_fields = ('deskripsi',)
+    search_fields = ('deskripsi', 'kode')
+
+
+@admin.register(LearningOutcome)
+class LearningOutcomeAdmin(admin.ModelAdmin):
+    list_display = ('subject', 'kode', 'fase', 'urutan', 'aktif')
+    list_filter = ('subject', 'fase', 'aktif')
+    search_fields = ('kode', 'deskripsi')
+
+
+@admin.register(LearningMaterial)
+class LearningMaterialAdmin(admin.ModelAdmin):
+    list_display = ('subject', 'kode', 'judul', 'urutan', 'aktif')
+    list_filter = ('subject', 'aktif')
+    search_fields = ('kode', 'judul', 'deskripsi')
+    filter_horizontal = ('objectives',)
+
+
+@admin.register(LearningTask)
+class LearningTaskAdmin(admin.ModelAdmin):
+    list_display = ('judul', 'subject', 'academic_year', 'status', 'bobot', 'batas_pengumpulan')
+    list_filter = ('subject', 'academic_year', 'status')
+    search_fields = ('judul', 'deskripsi', 'instruksi')
+    filter_horizontal = ('class_groups', 'objectives')
+
+
+@admin.register(LearningTaskSubmission)
+class LearningTaskSubmissionAdmin(admin.ModelAdmin):
+    list_display = ('task', 'student', 'status', 'nilai', 'submitted_at', 'dinilai_oleh')
+    list_filter = ('status', 'task__subject', 'task__academic_year')
+    search_fields = ('task__judul', 'student__nama', 'student__nis', 'student__nisn')
 
 
 @admin.register(FormativeScore)
@@ -129,6 +185,44 @@ class EvaluasiSumatifAdmin(admin.ModelAdmin):
     list_display = ('nama', 'subject', 'jenis', 'tanggal', 'bobot', 'aktif')
     list_filter = ('jenis', 'aktif', 'subject')
     search_fields = ('nama', 'deskripsi')
+
+
+class AssessmentComponentInline(admin.TabularInline):
+    model = AssessmentComponent
+    extra = 1
+
+
+@admin.register(Assessment)
+class AssessmentAdmin(admin.ModelAdmin):
+    list_display = ('nama', 'subject', 'semester', 'kategori', 'status', 'aktif')
+    list_filter = ('kategori', 'status', 'aktif', 'semester', 'subject')
+    search_fields = ('nama', 'deskripsi')
+    inlines = [AssessmentComponentInline]
+
+
+@admin.register(AssessmentResult)
+class AssessmentResultAdmin(admin.ModelAdmin):
+    list_display = ('student', 'component', 'nilai', 'status', 'dinilai_oleh')
+    list_filter = ('status', 'component__assessment__kategori', 'component__assessment__subject')
+    search_fields = ('student__nama', 'student__nis', 'student__nisn')
+
+
+@admin.register(AssessmentObjective)
+class AssessmentObjectiveAdmin(admin.ModelAdmin):
+    list_display = ('assessment', 'objective', 'bobot')
+    list_filter = ('assessment__kategori', 'assessment__subject')
+
+
+@admin.register(AssessmentRubric)
+class AssessmentRubricAdmin(admin.ModelAdmin):
+    list_display = ('component', 'level', 'urutan')
+    list_filter = ('component__assessment__subject',)
+
+
+@admin.register(GradeConfiguration)
+class GradeConfigurationAdmin(admin.ModelAdmin):
+    list_display = ('__str__', 'bobot_lm', 'bobot_sts', 'bobot_sas', 'aktif')
+    list_filter = ('aktif', 'academic_year', 'subject')
 
 
 @admin.register(AuditLog)

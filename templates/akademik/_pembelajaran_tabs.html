@@ -1,0 +1,8 @@
+{% if subject %}
+<div class="subnav" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+  <a class="btn btn-sm {% if active_tab == 'tp' %}btn-primary{% endif %}" href="{% url 'akademik:tp_list' subject.id %}"><svg class="icon"><use href="#i-target"/></svg> Tujuan Pembelajaran</a>
+  <a class="btn btn-sm {% if active_tab == 'cp' %}btn-primary{% endif %}" href="{% url 'akademik:cp_list' subject.id %}"><svg class="icon"><use href="#i-flag"/></svg> Capaian (CP)</a>
+  <a class="btn btn-sm {% if active_tab == 'materi' %}btn-primary{% endif %}" href="{% url 'akademik:materi_list' subject.id %}"><svg class="icon"><use href="#i-book"/></svg> Materi</a>
+  <a class="btn btn-sm {% if active_tab == 'tugas' %}btn-primary{% endif %}" href="{% url 'akademik:tugas_pembelajaran_list' subject.id %}"><svg class="icon"><use href="#i-clipboard"/></svg> Tugas</a>
+</div>
+{% endif %}

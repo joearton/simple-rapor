@@ -1,0 +1,113 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if asesmen %}Ubah Asesmen{% else %}Tambah Asesmen{% endif %}{% endblock %}
+{% block topbar %}{% if asesmen %}Ubah Asesmen{% else %}Tambah Asesmen{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:asesmen_list' %}">Asesmen</a>
+  <span>/</span>
+  <span>{% if asesmen %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if asesmen %}{{ asesmen.nama }}{% else %}Asesmen Baru{% endif %}</h2>
+    <p>Semester {{ semester.nama|default:"-" }} {{ semester.academic_year.tahun|default:"" }}. Komponen kosong tidak dihitung nol.</p>
+  </div>
+</div>
+
+<form method="post" id="form-asesmen" novalidate>
+  {% csrf_token %}
+  <div class="panel">
+    <div class="panel-head"><h3>Data Asesmen</h3></div>
+    <div class="panel-body">
+      {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="form-grid">
+        <div class="field">
+          <label for="{{ form.subject.id_for_label }}">Mata Pelajaran</label>
+          {{ form.subject }}{{ form.subject.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.nama.id_for_label }}">Nama Asesmen</label>
+          {{ form.nama }}{{ form.nama.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.kategori.id_for_label }}">Kategori</label>
+          {{ form.kategori }}{{ form.kategori.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.metode.id_for_label }}">Metode</label>
+          {{ form.metode }}{{ form.metode.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.class_group.id_for_label }}">Kelas</label>
+          {{ form.class_group }}{{ form.class_group.errors }}
+          <div class="help">{{ form.class_group.help_text }}</div>
+        </div>
+        <div class="field">
+          <label for="{{ form.tanggal.id_for_label }}">Tanggal</label>
+          {{ form.tanggal }}{{ form.tanggal.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.bobot.id_for_label }}">Bobot (%)</label>
+          {{ form.bobot }}{{ form.bobot.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.status.id_for_label }}">Status</label>
+          {{ form.status }}{{ form.status.errors }}
+        </div>
+        <div class="field full">
+          <label for="{{ form.deskripsi.id_for_label }}">Deskripsi</label>
+          {{ form.deskripsi }}{{ form.deskripsi.errors }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Komponen Nilai</h3>
+      <span class="hint">Satu komponen = satu kolom nilai di grid</span>
+    </div>
+    <div class="panel-body">
+      {{ formset.management_form }}
+      {% if formset.non_form_errors %}<div class="alert error">{{ formset.non_form_errors }}</div>{% endif %}
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Nama</th>
+              <th>Tipe</th>
+              <th class="num" style="width:80px">Urutan</th>
+              <th class="num" style="width:90px">Bobot</th>
+              <th class="num" style="width:110px">Nilai Maks</th>
+              <th class="num" style="width:70px">Wajib</th>
+              <th class="num" style="width:70px">Hapus</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for komponen in formset %}
+            <tr>
+              <td>{{ komponen.id }}{{ komponen.nama }}{{ komponen.nama.errors }}</td>
+              <td>{{ komponen.tipe }}{{ komponen.tipe.errors }}</td>
+              <td>{{ komponen.urutan }}{{ komponen.urutan.errors }}</td>
+              <td>{{ komponen.bobot }}{{ komponen.bobot.errors }}</td>
+              <td>{{ komponen.nilai_maksimal }}{{ komponen.nilai_maksimal.errors }}</td>
+              <td class="num">{{ komponen.wajib }}</td>
+              <td class="num">{% if komponen.instance.pk %}{{ komponen.DELETE }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="note-box" style="margin-top:12px">
+        Contoh: kategori Formatif biasanya memakai nilai maksimal 4. Sumatif/STS/SAS memakai 0-100.
+      </div>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:16px">
+    <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Asesmen</button>
+    <a class="btn" href="{% url 'akademik:asesmen_list' %}">Batal</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,19 +1,27 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_DOWN, ROUND_HALF_UP, ROUND_UP
 
 from .models import (
+    AssessmentObjective,
+    AssessmentResult,
     ClassGroup,
     Extracurricular,
     FormativeScore,
+    GradeConfiguration,
     HomeroomNote,
     School,
     Semester,
     Student,
     Subject,
-    SummativeLM,
-    SummativeScore,
 )
 
 MAX_LM = 10
+
+ROUNDING = {
+    'HALF_UP': ROUND_HALF_UP,
+    'HALF_DOWN': ROUND_HALF_DOWN,
+    'UP': ROUND_UP,
+    'DOWN': ROUND_DOWN,
+}
 
 
 def q2(value):
@@ -21,6 +29,53 @@ def q2(value):
     if value is None:
         return None
     return Decimal(value).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+def bulatkan(value, konfigurasi=None):
+    """Bulatkan nilai sesuai konfigurasi dan jepit pada batas nilai."""
+    if value is None:
+        return None
+    nilai = Decimal(value)
+    if konfigurasi is None:
+        return q2(nilai)
+    desimal = int(konfigurasi.jumlah_desimal)
+    kuantum = Decimal(1).scaleb(-desimal)
+    hasil = nilai.quantize(
+        kuantum, rounding=ROUNDING.get(konfigurasi.metode_pembulatan, ROUND_HALF_UP)
+    )
+    if hasil < konfigurasi.nilai_min:
+        hasil = Decimal(konfigurasi.nilai_min)
+    if hasil > konfigurasi.nilai_max:
+        hasil = Decimal(konfigurasi.nilai_max)
+    return hasil
+
+
+def _rata(values):
+    bersih = [Decimal(v) for v in values if v is not None]
+    if not bersih:
+        return None
+    return sum(bersih) / Decimal(len(bersih))
+
+
+def _rata_terbobot(pasangan):
+    """Rata-rata tertimbang dari pasangan (nilai, bobot), abaikan yang kosong."""
+    total_bobot = Decimal('0')
+    total = Decimal('0')
+    for nilai, bobot in pasangan:
+        if nilai is None:
+            continue
+        bobot = Decimal(bobot or 0)
+        if bobot <= 0:
+            continue
+        total += Decimal(nilai) * bobot
+        total_bobot += bobot
+    if total_bobot <= 0:
+        return None
+    return total / total_bobot
+
+
+def konfigurasi_nilai(subject, semester):
+    return GradeConfiguration.get_config(subject, semester.academic_year)
 
 
 def angka(value):
@@ -61,7 +116,7 @@ def kelas_aktif():
 def daftar_siswa(class_group):
     if class_group is None:
         return Student.objects.none()
-    return Student.objects.filter(class_group=class_group, aktif=True).order_by('no_urut')
+    return Student.objects.in_class(class_group).filter(aktif=True).order_by('no_urut')
 
 
 def daftar_mapel(tahun=None):
@@ -74,13 +129,33 @@ def daftar_mapel(tahun=None):
 
 
 def nilai_formatif_map(student, subject, semester):
-    data = FormativeScore.objects.filter(
+    links = AssessmentObjective.objects.filter(
+        assessment__subject=subject,
+        assessment__semester=semester,
+        assessment__kategori='FORMATIF',
+    ).values_list('assessment_id', 'objective_id')
+    objective_by_assessment = dict(links)
+    data = {}
+    results = AssessmentResult.objects.filter(
         student=student,
-        objective__subject=subject,
-        objective__academic_year=semester.academic_year,
-        semester=semester,
-    ).values_list('objective_id', 'nilai')
-    return dict(data)
+        component__assessment__subject=subject,
+        component__assessment__semester=semester,
+        component__assessment__kategori='FORMATIF',
+    ).values_list('component__assessment_id', 'nilai')
+    for assessment_id, nilai in results:
+        objective_id = objective_by_assessment.get(assessment_id)
+        if objective_id is not None and nilai is not None:
+            data[objective_id] = nilai
+    if not data:
+        data = dict(
+            FormativeScore.objects.filter(
+                student=student,
+                objective__subject=subject,
+                objective__academic_year=semester.academic_year,
+                semester=semester,
+            ).values_list('objective_id', 'nilai')
+        )
+    return data
 
 
 def tujuan_aktif(subject, semester):
@@ -90,38 +165,71 @@ def tujuan_aktif(subject, semester):
 
 
 def deskripsi_capaian(student, subject, semester, objectives=None):
-    """Meniru formula Excel: TP dengan nilai tertinggi (>=3) dan terendah (<=2)."""
+    """Ambil TP unggul/perlu bimbingan dengan ambang dari konfigurasi nilai."""
     if objectives is None:
         objectives = list(
             subject.tujuan_list.filter(academic_year=semester.academic_year).order_by('nomor')
         )
-    scores = FormativeScore.objects.filter(
-        student=student,
-        objective__subject=subject,
-        objective__academic_year=semester.academic_year,
-        semester=semester,
+    links = AssessmentObjective.objects.filter(
+        assessment__subject=subject,
+        assessment__semester=semester,
+        assessment__kategori='FORMATIF',
     ).select_related('objective')
+    objective_by_assessment = {
+        link.assessment_id: link.objective for link in links
+    }
     skor = {}
-    teks_tp = {}
-    for score in scores:
-        skor[score.objective_id] = score.nilai
-        teks_tp[score.objective_id] = score.deskripsi_tp or score.objective.deskripsi
+    results = AssessmentResult.objects.filter(
+        student=student,
+        component__assessment__subject=subject,
+        component__assessment__semester=semester,
+        component__assessment__kategori='FORMATIF',
+    ).select_related('component__assessment')
+    for result in results:
+        if result.nilai is None:
+            continue
+        objective = objective_by_assessment.get(result.component.assessment_id)
+        if objective is not None:
+            skor[objective.id] = result.nilai
 
+    # Fallback untuk data yang belum tersinkron ke asesmen generik.
+    if not skor:
+        legacy = FormativeScore.objects.filter(
+            student=student,
+            objective__subject=subject,
+            objective__academic_year=semester.academic_year,
+            semester=semester,
+        )
+        skor = {score.objective_id: score.nilai for score in legacy}
+
+    teks_legacy = dict(
+        FormativeScore.objects.filter(
+            student=student,
+            objective__subject=subject,
+            objective__academic_year=semester.academic_year,
+            semester=semester,
+        ).values_list('objective_id', 'deskripsi_tp')
+    )
+    teks_tp = {
+        obj.id: (teks_legacy.get(obj.id) or obj.deskripsi) for obj in objectives
+    }
+
+    konfigurasi = konfigurasi_nilai(subject, semester)
     unggul = perlu = None
     if skor:
         tertinggi = max(skor.values())
-        if tertinggi >= 3:
-            for o in objectives:
-                if skor.get(o.id) == tertinggi:
-                    unggul = o
+        if tertinggi >= konfigurasi.ambang_unggul:
+            for obj in objectives:
+                if skor.get(obj.id) == tertinggi:
+                    unggul = obj
                     break
         positif = {oid: v for oid, v in skor.items() if v > 0}
         if positif:
             terendah = min(positif.values())
-            if terendah <= 2:
-                for o in objectives:
-                    if skor.get(o.id) == terendah:
-                        perlu = o
+            if terendah <= konfigurasi.ambang_perlu_bimbingan:
+                for obj in objectives:
+                    if skor.get(obj.id) == terendah:
+                        perlu = obj
                         break
 
     parts = []
@@ -137,16 +245,76 @@ def deskripsi_capaian(student, subject, semester, objectives=None):
         'unggul': unggul,
         'perlu': perlu,
         'teks': ' '.join(parts),
+        'konfigurasi': konfigurasi,
+    }
+
+
+def hasil_asesmen(student, subject, semester):
+    return AssessmentResult.objects.filter(
+        student=student,
+        component__assessment__subject=subject,
+        component__assessment__semester=semester,
+    ).select_related('component__assessment')
+
+
+def hitung_nilai(student, subject, semester, konfigurasi=None):
+    """Hitung nilai rapor dari hasil asesmen generik.
+
+    Komponen kosong tidak dihitung nol. Bobot dinormalisasi hanya dari
+    komponen yang terisi, sesuai konfigurasi nilai.
+    """
+    konfigurasi = konfigurasi or konfigurasi_nilai(subject, semester)
+    lm_values, sts_values = [], []
+    sas_non_tes, sas_tes = [], []
+    for result in hasil_asesmen(student, subject, semester):
+        if result.nilai is None:
+            continue
+        assessment = result.component.assessment
+        if assessment.kategori == 'SUMATIF_LM':
+            lm_values.append(result.nilai)
+        elif assessment.kategori == 'STS':
+            sts_values.append(result.nilai)
+        elif assessment.kategori == 'SAS':
+            if result.component.tipe == 'NON_TES':
+                sas_non_tes.append(result.nilai)
+            else:
+                sas_tes.append(result.nilai)
+
+    rata_lm = _rata(lm_values)
+    nilai_sts = _rata(sts_values)
+    nilai_non_tes = _rata(sas_non_tes)
+    nilai_tes = _rata(sas_tes)
+    rata_sas = _rata_terbobot([
+        (nilai_non_tes, konfigurasi.bobot_sas_non_tes),
+        (nilai_tes, konfigurasi.bobot_sas_tes),
+    ])
+    nilai = _rata_terbobot([
+        (rata_lm, konfigurasi.bobot_lm),
+        (nilai_sts, konfigurasi.bobot_sts),
+        (rata_sas, konfigurasi.bobot_sas),
+    ])
+    return {
+        'rata_lm': rata_lm,
+        'sts': nilai_sts,
+        'rata_sas': rata_sas,
+        'sas_non_tes': nilai_non_tes,
+        'sas_tes': nilai_tes,
+        'nilai': bulatkan(nilai, konfigurasi),
+        'konfigurasi': konfigurasi,
     }
 
 
 def nilai_lm_map(students, subject, semester):
-    qs = SummativeLM.objects.filter(
-        student__in=students, subject=subject, semester=semester
-    ).values_list('student_id', 'nomor', 'nilai')
+    qs = AssessmentResult.objects.filter(
+        student__in=students,
+        component__assessment__subject=subject,
+        component__assessment__semester=semester,
+        component__assessment__kategori='SUMATIF_LM',
+    ).values_list('student_id', 'component__assessment__nomor', 'nilai')
     hasil = {}
     for student_id, nomor, nilai in qs:
-        hasil.setdefault(student_id, {})[nomor] = nilai
+        if nomor:
+            hasil.setdefault(student_id, {})[nomor] = nilai
     return hasil
 
 
@@ -154,35 +322,22 @@ def ringkasan_sumatif(students, subject, semester):
     """Data siap tampil untuk halaman input sumatif (gaya spreadsheet)."""
     students = list(students)
     lm_map = nilai_lm_map(students, subject, semester)
-    sumatif = {
-        s.student_id: s
-        for s in SummativeScore.objects.filter(
-            student__in=students, subject=subject, semester=semester
-        )
-    }
+    konfigurasi = konfigurasi_nilai(subject, semester)
     rows = []
     for siswa in students:
         lm = lm_map.get(siswa.id, {})
         nilai_lm = [lm.get(i) for i in range(1, MAX_LM + 1)]
-        terisi = [n for n in nilai_lm if n is not None]
-        rata_lm = sum(terisi) / Decimal(len(terisi)) if terisi else None
-        obj = sumatif.get(siswa.id)
-        sts = obj.sts if obj else None
-        non_tes = obj.sas_non_tes if obj else None
-        tes = obj.sas_tes if obj else None
-        sas = [n for n in (non_tes, tes) if n is not None]
-        rata_sas = sum(sas) / Decimal(len(sas)) if sas else None
-        bagian = [n for n in (rata_lm, sts, rata_sas) if n is not None]
-        nilai_rapor = sum(Decimal(n) for n in bagian) / Decimal(len(bagian)) if bagian else None
+        hitung = hitung_nilai(siswa, subject, semester, konfigurasi)
         rows.append({
             'siswa': siswa,
             'lm': nilai_lm,
-            'rata_lm': rata_lm,
-            'sts': sts,
-            'sas_non_tes': non_tes,
-            'sas_tes': tes,
-            'rata_sas': rata_sas,
-            'nilai_rapor': nilai_rapor,
+            'rata_lm': hitung['rata_lm'],
+            'sts': hitung['sts'],
+            'sas_non_tes': hitung['sas_non_tes'],
+            'sas_tes': hitung['sas_tes'],
+            'rata_sas': hitung['rata_sas'],
+            'nilai_rapor': hitung['nilai'],
+            'konfigurasi': konfigurasi,
         })
     return rows
 
@@ -190,14 +345,18 @@ def ringkasan_sumatif(students, subject, semester):
 def nilai_akhir_siswa(student, semester):
     """Nilai akhir per mata pelajaran untuk satu siswa."""
     hasil = {}
-    for nilai in SummativeScore.objects.filter(student=student, semester=semester).select_related(
-        'subject'
-    ):
-        hasil[nilai.subject_id] = {
-            'nilai': nilai.nilai_rapor,
-            'sts': nilai.sts,
-            'rata_lm': nilai.rata_lm,
-            'rata_sas': nilai.rata_sas,
+    for subject in daftar_mapel(semester.academic_year):
+        hitung = hitung_nilai(student, subject, semester)
+        if all(
+            hitung[key] is None
+            for key in ('nilai', 'sts', 'rata_lm', 'rata_sas')
+        ):
+            continue
+        hasil[subject.id] = {
+            'nilai': hitung['nilai'],
+            'sts': hitung['sts'],
+            'rata_lm': hitung['rata_lm'],
+            'rata_sas': hitung['rata_sas'],
         }
     return hasil
 
@@ -208,19 +367,16 @@ def data_leger(class_group, semester, students=None):
     else:
         students = list(students)
     subjects = list(daftar_mapel(semester.academic_year))
-    nilai = {}
-    for obj in SummativeScore.objects.filter(
-        student__in=students, semester=semester
-    ).select_related('subject'):
-        nilai[(obj.student_id, obj.subject_id)] = obj.nilai_rapor
 
     rows = []
     for siswa in students:
+        nilai_siswa = nilai_akhir_siswa(siswa, semester)
         row = []
         total = Decimal('0')
         jumlah = 0
         for mapel in subjects:
-            n = nilai.get((siswa.id, mapel.id))
+            info = nilai_siswa.get(mapel.id, {})
+            n = info.get('nilai')
             row.append(n)
             if n is not None:
                 total += Decimal(n)

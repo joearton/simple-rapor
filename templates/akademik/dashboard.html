@@ -135,6 +135,26 @@
     <div class="mc-icon"><svg class="icon"><use href="#i-book"/></svg></div>
     <div><strong>Mata Pelajaran</strong><small>Tambah, ubah, dan atur guru pengampu mata pelajaran.</small></div>
   </a>
+  <a class="menu-card" href="{% url 'akademik:cp_menu' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-flag"/></svg></div>
+    <div><strong>Capaian Pembelajaran</strong><small>Kelola CP sebagai acuan penyusunan TP.</small></div>
+  </a>
+  <a class="menu-card" href="{% url 'akademik:materi_menu' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-book"/></svg></div>
+    <div><strong>Materi Pembelajaran</strong><small>Materi yang mencakup satu atau beberapa TP.</small></div>
+  </a>
+  <a class="menu-card" href="{% url 'akademik:tugas_pembelajaran_list' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-clipboard"/></svg></div>
+    <div><strong>Tugas Pembelajaran</strong><small>Tugas, lampiran, dan pengumpulan peserta didik.</small></div>
+  </a>
+  <a class="menu-card" href="{% url 'akademik:asesmen_list' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-chart"/></svg></div>
+    <div><strong>Asesmen</strong><small>Asesmen generik dengan komponen nilai dan autosave.</small></div>
+  </a>
+  <a class="menu-card" href="{% url 'akademik:konfigurasi_nilai' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-badge"/></svg></div>
+    <div><strong>Konfigurasi Nilai</strong><small>Bobot, pembulatan, dan ambang deskripsi.</small></div>
+  </a>
   <a class="menu-card" href="{% url 'akademik:mengajar' %}">
     <div class="mc-icon"><svg class="icon"><use href="#i-badge"/></svg></div>
     <div><strong>Pembagian Mengajar</strong><small>Tetapkan guru pengampu setiap mapel dan wali kelas.</small></div>
@@ -180,6 +200,22 @@
   <a class="menu-card" href="{% url 'akademik:tp_menu' %}">
     <div class="mc-icon"><svg class="icon"><use href="#i-target"/></svg></div>
     <div><strong>Tujuan Pembelajaran</strong><small>Kelola TP dan lingkup materi mapel yang Anda ampu.</small></div>
+  </a>
+  <a class="menu-card" href="{% url 'akademik:cp_menu' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-flag"/></svg></div>
+    <div><strong>Capaian Pembelajaran</strong><small>Kelola CP sebagai acuan penyusunan TP.</small></div>
+  </a>
+  <a class="menu-card" href="{% url 'akademik:materi_menu' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-book"/></svg></div>
+    <div><strong>Materi Pembelajaran</strong><small>Materi yang mencakup satu atau beberapa TP.</small></div>
+  </a>
+  <a class="menu-card" href="{% url 'akademik:tugas_pembelajaran_list' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-clipboard"/></svg></div>
+    <div><strong>Tugas Pembelajaran</strong><small>Tugas, lampiran, dan pengumpulan peserta didik.</small></div>
+  </a>
+  <a class="menu-card" href="{% url 'akademik:asesmen_list' %}">
+    <div class="mc-icon"><svg class="icon"><use href="#i-chart"/></svg></div>
+    <div><strong>Asesmen</strong><small>Asesmen generik dengan komponen nilai dan autosave.</small></div>
   </a>
   <a class="menu-card" href="{% url 'akademik:formatif_menu' %}">
     <div class="mc-icon"><svg class="icon"><use href="#i-clipboard"/></svg></div>

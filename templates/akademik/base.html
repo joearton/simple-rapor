@@ -14,6 +14,7 @@
   <symbol id="i-school" viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M9.5 21v-4h5v4"/><path d="M10 11h4"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6"/><path d="M17.5 14.6c1.8.6 3 2.4 3 5.4"/></symbol>
   <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="1.2"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 5h12l-2 4 2 4H5"/></symbol>
   <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="m8.5 11.5 2 2 4-4"/></symbol>
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></symbol>
   <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17"/><path d="M8 3v4M16 3v4"/></symbol>
@@ -52,6 +53,7 @@
       {% endif %}
       {% if is_super_admin_sekolah %}
       <a href="{% url 'akademik:identitas' %}" class="{% if active == 'identitas' %}active{% endif %}"><svg class="icon"><use href="#i-school"/></svg> Identitas Sekolah</a>
+      <a href="{% url 'akademik:konfigurasi_nilai' %}" class="{% if active == 'konfigurasi_nilai' %}active{% endif %}"><svg class="icon"><use href="#i-chart"/></svg> Konfigurasi Nilai</a>
       {% endif %}
       {% if is_admin_sekolah %}
       <a href="{% url 'akademik:guru_list' %}" class="{% if active == 'guru_list' or active == 'guru_tambah' or active == 'guru_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-user"/></svg> Data Guru</a>
@@ -61,8 +63,13 @@
       {% endif %}
 
       {% if is_admin_sekolah or guru_login %}
-      <div class="nav-label">Penilaian</div>
+      <div class="nav-label">Pembelajaran</div>
       <a href="{% url 'akademik:tp_menu' %}" class="{% if active == 'tp_menu' or active == 'tp_list' or active == 'tp_tambah' or active == 'tp_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-target"/></svg> Tujuan Pembelajaran</a>
+      <a href="{% url 'akademik:cp_menu' %}" class="{% if active == 'cp_menu' or active == 'cp_list' or active == 'cp_tambah' or active == 'cp_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-flag"/></svg> Capaian Pembelajaran</a>
+      <a href="{% url 'akademik:materi_menu' %}" class="{% if active == 'materi_menu' or active == 'materi_list' or active == 'materi_tambah' or active == 'materi_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-book"/></svg> Materi Pembelajaran</a>
+      <a href="{% url 'akademik:tugas_pembelajaran_list' %}" class="{% if active == 'tugas_pembelajaran_list' or active == 'tugas_pembelajaran_tambah' or active == 'tugas_pembelajaran_ubah' or active == 'tugas_pembelajaran_detail' %}active{% endif %}"><svg class="icon"><use href="#i-clipboard"/></svg> Tugas Pembelajaran</a>
+      <div class="nav-label">Penilaian</div>
+      <a href="{% url 'akademik:asesmen_list' %}" class="{% if active == 'asesmen_list' or active == 'asesmen_tambah' or active == 'asesmen_ubah' or active == 'asesmen_grid' or active == 'asesmen_impor' %}active{% endif %}"><svg class="icon"><use href="#i-chart"/></svg> Asesmen</a>
       <a href="{% url 'akademik:formatif_menu' %}" class="{% if active == 'formatif_menu' or active == 'formatif_entry' or active == 'formatif_evaluasi_tambah' or active == 'formatif_evaluasi_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-clipboard"/></svg> Evaluasi Formatif</a>
       <a href="{% url 'akademik:sumatif_menu' %}" class="{% if active == 'sumatif_menu' or active == 'sumatif_entry' or active == 'sumatif_evaluasi_tambah' or active == 'sumatif_evaluasi_ubah' %}active{% endif %}"><svg class="icon"><use href="#i-chart"/></svg> Evaluasi Sumatif</a>
       {% endif %}

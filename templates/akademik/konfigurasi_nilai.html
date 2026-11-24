@@ -1,0 +1,60 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Konfigurasi Nilai{% endblock %}
+{% block topbar %}Konfigurasi Nilai{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Konfigurasi Nilai</h2>
+    <p>Bobot, pembulatan, batas nilai, dan ambang deskripsi. Konfigurasi mapel/tahun lebih diprioritaskan dari default sekolah.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:asesmen_list' %}"><svg class="icon"><use href="#i-back"/></svg> Kembali ke Asesmen</a>
+  </div>
+</div>
+
+<form method="get" class="filter-bar" style="margin-bottom:14px">
+  <select class="form-input" name="tahun">
+    <option value="">Default semua tahun</option>
+    {% for item in daftar_tahun %}
+    <option value="{{ item.id }}" {% if tahun and tahun.id == item.id %}selected{% endif %}>{{ item.tahun }}</option>
+    {% endfor %}
+  </select>
+  <select class="form-input" name="mapel">
+    <option value="">Semua mata pelajaran</option>
+    {% for item in daftar_mapel %}
+    <option value="{{ item.id }}" {% if mapel and mapel.id == item.id %}selected{% endif %}>{{ item.nama }} ({{ item.academic_year.tahun }})</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-sm btn-primary">Pilih Konfigurasi</button>
+  <a class="btn btn-sm" href="{{ request.path }}">Default</a>
+</form>
+
+<div style="max-width:860px">
+  <form method="post" id="form-konfigurasi-nilai" novalidate>
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Parameter Perhitungan</h3></div>
+      <div class="panel-body">
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+          {% for field in form %}
+          <div class="field {% if field.name == 'aktif' %}{% else %}{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}{{ field.errors }}
+            {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="note-box" style="margin-top:16px">
+          Rumus: nilai akhir = rata-rata tertimbang dari rata-rata LM, STS, dan rata-rata SAS.
+          Komponen kosong tidak dihitung nol. SAS Non Tes dan SAS Tes digabung sesuai bobotnya.
+        </div>
+        <div class="actions" style="margin-top:18px">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Konfigurasi</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

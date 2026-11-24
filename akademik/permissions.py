@@ -2,6 +2,7 @@ from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.models import Group
+from django.db.models import Q
 from django.shortcuts import redirect
 
 from .models import ClassGroup, Semester, Teacher, TeachingAssignment
@@ -96,6 +97,16 @@ def can_manage_homeroom(user, class_group=None):
     return is_admin(user) or is_wali_kelas(user, class_group)
 
 
+def _penugasan_terpilih(subject, class_group, semester=None):
+    """Penugasan mapel/kelas; utamakan semester aktif, lalu penugasan setahun."""
+    qs = TeachingAssignment.objects.filter(subject=subject, class_group=class_group)
+    if semester is not None:
+        penugasan = qs.filter(semester=semester).select_related('teacher').first()
+        if penugasan is not None:
+            return penugasan
+    return qs.filter(semester__isnull=True).select_related('teacher').first()
+
+
 def penugasan_mapel(user, subject, class_group=None):
     """Pembagian mengajar untuk mapel pada kelas aktif."""
     guru = get_teacher(user)
@@ -104,11 +115,10 @@ def penugasan_mapel(user, subject, class_group=None):
     kelas = class_group or active_class()
     if kelas is None:
         return None
-    return (
-        TeachingAssignment.objects.select_related('teacher', 'subject')
-        .filter(teacher=guru, subject=subject, class_group=kelas)
-        .first()
-    )
+    penugasan = _penugasan_terpilih(subject, kelas, active_semester())
+    if penugasan is not None and penugasan.teacher_id == guru.id:
+        return penugasan
+    return None
 
 
 def boleh_kelola_mapel(user, subject, class_group=None):
@@ -125,9 +135,7 @@ def guru_penilai(user, subject, class_group=None):
     kelas = class_group or active_class()
     if kelas is None:
         return None
-    penugasan = TeachingAssignment.objects.filter(
-        subject=subject, class_group=kelas
-    ).select_related('teacher').first()
+    penugasan = _penugasan_terpilih(subject, kelas, active_semester())
     return penugasan.teacher if penugasan else None
 
 
@@ -144,9 +152,12 @@ def mapel_untuk_user(user):
     guru = get_teacher(user)
     if guru is None or kelas is None:
         return Subject.objects.none()
-    return base.filter(
-        penugasan__teacher=guru, penugasan__class_group=kelas
-    ).distinct()
+    penugasan_filter = Q(penugasan__teacher=guru, penugasan__class_group=kelas)
+    if semester is not None:
+        penugasan_filter &= (
+            Q(penugasan__semester=semester) | Q(penugasan__semester__isnull=True)
+        )
+    return base.filter(penugasan_filter).distinct()
 
 
 def admin_required(view_func):

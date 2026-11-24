@@ -75,13 +75,20 @@ Sudah tersedia:
 - Tahun pelajaran/semester/kelas, mapel per tahun, guru, siswa, penugasan.
 - Tugas pembelajaran (model `LearningObjective` diperluas), evaluasi formatif/sumatif (rencana), grid nilai formatif/sumatif, leger, rapor dan sampul, catatan/ekskul terikat tahun.
 - Import/export Excel, pengaturan identitas/logo/tata letak rapor, filter/paginasi.
-- 53 test lulus.
+- 90 test lulus.
+
+Pembaruan Tahap 1–4 (24 Nov 2026):
+- Peran Super Admin/Kepala Sekolah/Operator/Guru/Wali + audit log + dashboard per peran.
+- Master `Grade`, `SchoolProfile`, riwayat `StudentEnrollment`, dan penugasan mengajar per semester.
+- Roster kelas membaca riwayat enrollment; import/export data kelas tersedia.
+- CP, materi, tugas pembelajaran, dan pengumpulan tugas tersedia beserta tab, filter, pagination, dan import/export.
+- Asesmen generik (`Assessment`/`Component`/`Result`), konfigurasi bobot & pembulatan, grid autosave, serta deskripsi TP dengan ambang konfigurabel.
 
 Kesenjangan utama terhadap target:
 1. Model asesmen masih spesifik (`FormativeScore`, `SummativeLM/Score`), belum generik (`Assessment/Component/Result`) dan belum punya konfigurasi bobot formal.
 2. TP dan tugas masih dalam satu model; CP, lingkup materi, submission, rubrik belum ada.
 3. Raport belum dimodelkan sebagai entitas (`ReportCard`, status, publikasi, locking).
-4. Peran Kepala Sekolah/Operator/Siswa belum dipisah; belum ada audit log.
+4. Peran Kepala Sekolah/Operator/Guru/Wali sudah dipisah dan audit log tersedia; peran Siswa/Orang Tua belum.
 5. PDF masih berbasis print browser, belum WeasyPrint; belum ada backup/dokumentasi lengkap.
 6. Struktur masih satu app `akademik`; target modular apps.
 

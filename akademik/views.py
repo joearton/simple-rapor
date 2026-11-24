@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+import json
 
 from django.contrib import messages
 from django.contrib.auth import logout, update_session_auth_hash
@@ -7,20 +8,27 @@ from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView, PasswordChangeView
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, ProtectedError, Q
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .audit import catat_audit
 from .forms import (
     AcademicYearForm,
     AdminResetPasswordForm,
+    AssessmentComponentFormSet,
+    AssessmentForm,
+    CapaianPembelajaranForm,
     EvaluasiFormatifForm,
     EvaluasiSumatifForm,
     ClassGroupForm,
+    GradeConfigurationForm,
     KelasForm,
     LoginForm,
+    MateriPembelajaranForm,
     ProfileForm,
     SchoolForm,
     SemesterForm,
@@ -28,19 +36,29 @@ from .forms import (
     StudentForm,
     SubjectForm,
     TeacherForm,
+    TugasPembelajaranForm,
     TujuanPembelajaranForm,
     UserForm,
 )
 from .models import (
     AcademicYear,
+    Assessment,
+    AssessmentComponent,
+    AssessmentObjective,
+    AssessmentResult,
     AuditLog,
     ClassGroup,
     EvaluasiFormatif,
     EvaluasiSumatif,
     Extracurricular,
     FormativeScore,
+    GradeConfiguration,
     HomeroomNote,
+    LearningMaterial,
     LearningObjective,
+    LearningOutcome,
+    LearningTask,
+    LearningTaskSubmission,
     School,
     Semester,
     Student,
@@ -65,12 +83,15 @@ from .permissions import (
 )
 from .services import (
     MAX_LM,
+    bulatkan,
     daftar_mapel,
     daftar_siswa,
     data_leger,
     data_rapor,
     deskripsi_capaian,
+    hitung_nilai,
     kelas_aktif,
+    konfigurasi_nilai,
     nilai_formatif_map,
     ringkasan_sumatif,
     semester_aktif,
@@ -186,7 +207,7 @@ def dashboard(request):
         terisi = 0
         if semester and kelas:
             terisi = SummativeScore.objects.filter(
-                subject=mapel, semester=semester, student__class_group=kelas
+                subject=mapel, semester=semester, student__in=daftar_siswa(kelas)
             ).count()
         target = total_siswa
         total_terisi += terisi
@@ -262,7 +283,7 @@ def siswa_list(request):
         return _tolak_halaman(request)
     kelas = _kelas()
     if kelas:
-        qs = Student.objects.filter(class_group=kelas)
+        qs = Student.objects.in_class(kelas)
     else:
         qs = Student.objects.none()
     q = _q(request)
@@ -430,6 +451,7 @@ def tp_list(request, subject_id):
         'q': q,
         'status_filter': status,
         'tahun': tahun,
+        'active_tab': 'tp',
     })
 
 
@@ -445,7 +467,7 @@ def formatif_entry(request, subject_id):
     q = _q(request)
     status = request.GET.get('status') or ''
     base = (
-        Student.objects.filter(class_group=kelas, aktif=True) if kelas
+        Student.objects.in_class(kelas).filter(aktif=True) if kelas
         else Student.objects.none()
     )
     base = _filter_siswa_text(base, q)
@@ -528,7 +550,7 @@ def sumatif_entry(request, subject_id):
     q = _q(request)
     status = request.GET.get('status') or ''
     base = (
-        Student.objects.filter(class_group=kelas, aktif=True) if kelas
+        Student.objects.in_class(kelas).filter(aktif=True) if kelas
         else Student.objects.none()
     )
     base = _filter_siswa_text(base, q)
@@ -602,7 +624,7 @@ def catatan_entry(request):
     q = _q(request)
     status = request.GET.get('status') or ''
     base = (
-        Student.objects.filter(class_group=kelas, aktif=True) if kelas
+        Student.objects.in_class(kelas).filter(aktif=True) if kelas
         else Student.objects.none()
     )
     base = _filter_siswa_text(base, q)
@@ -661,7 +683,7 @@ def ekskul_entry(request):
     q = _q(request)
     status = request.GET.get('status') or ''
     base = (
-        Student.objects.filter(class_group=kelas, aktif=True) if kelas
+        Student.objects.in_class(kelas).filter(aktif=True) if kelas
         else Student.objects.none()
     )
     base = _filter_siswa_text(base, q)
@@ -721,7 +743,7 @@ def leger(request):
     semester = _semester()
     q = _q(request)
     base = (
-        Student.objects.filter(class_group=class_group, aktif=True) if class_group
+        Student.objects.in_class(class_group).filter(aktif=True) if class_group
         else Student.objects.none()
     )
     base = _filter_siswa_text(base, q)
@@ -742,7 +764,7 @@ def rapor_index(request):
     kelas = _kelas()
     q = _q(request)
     base = (
-        Student.objects.filter(class_group=kelas, aktif=True) if kelas
+        Student.objects.in_class(kelas).filter(aktif=True) if kelas
         else Student.objects.none()
     )
     base = _filter_siswa_text(base, q)
@@ -894,7 +916,10 @@ def mapel_list(request):
         for p in TeachingAssignment.objects.filter(
             class_group=kelas, subject__in=page_obj.object_list
         ).select_related('teacher', 'subject'):
-            penugasan[p.subject_id] = p.teacher
+            if p.semester_id:
+                penugasan[p.subject_id] = p.teacher
+            else:
+                penugasan.setdefault(p.subject_id, p.teacher)
     rows = [{'subject': s, 'guru': penugasan.get(s.id)} for s in page_obj]
     return render(request, 'akademik/mapel_list.html', {
         'rows': rows,
@@ -966,7 +991,8 @@ def mengajar(request):
                 guru_id = request.POST.get(f'mapel_{subject.id}') or ''
                 if not guru_id:
                     TeachingAssignment.objects.filter(
-                        subject=subject, class_group=kelas, academic_year=year
+                        subject=subject, class_group=kelas, academic_year=year,
+                        semester__isnull=True,
                     ).delete()
                     continue
                 guru = teachers.filter(pk=guru_id).first()
@@ -974,7 +1000,7 @@ def mengajar(request):
                     continue
                 TeachingAssignment.objects.update_or_create(
                     subject=subject, class_group=kelas, academic_year=year,
-                    defaults={'teacher': guru},
+                    semester=None, defaults={'teacher': guru},
                 )
             wali_id = request.POST.get('wali_kelas_guru') or ''
             wali = teachers.filter(pk=wali_id).first()
@@ -991,10 +1017,16 @@ def mengajar(request):
 
     penugasan = {}
     if kelas and year:
-        for p in TeachingAssignment.objects.filter(
-            class_group=kelas, academic_year=year, subject__in=subjects
-        ).select_related('teacher'):
-            penugasan[p.subject_id] = p.teacher_id
+        qs = TeachingAssignment.objects.filter(
+            class_group=kelas, academic_year=year, subject__in=subjects,
+        ).select_related('teacher')
+        if semester is not None:
+            qs = qs.filter(Q(semester=semester) | Q(semester__isnull=True))
+        for p in qs:
+            if p.semester_id:
+                penugasan[p.subject_id] = p.teacher_id
+            else:
+                penugasan.setdefault(p.subject_id, p.teacher_id)
     rows = [
         {'subject': s, 'guru_id': penugasan.get(s.id)} for s in subjects
     ]
@@ -1220,7 +1252,9 @@ def tahun_list(request):
             'tahun': tahun,
             'semesters': tahun.semester_list.all(),
             'classes': tahun.kelas_list.all(),
-            'jumlah_siswa': Student.objects.filter(class_group__academic_year=tahun).count(),
+            'jumlah_siswa': Student.objects.filter(
+                enrollments__academic_year=tahun
+            ).distinct().count(),
             'jumlah_tp': LearningObjective.objects.filter(academic_year=tahun).count(),
             'jumlah_formatif': FormativeScore.objects.filter(
                 semester__academic_year=tahun
@@ -1373,12 +1407,20 @@ def kelas_hapus(request, pk):
     if request.method == 'POST':
         if kelas.aktif:
             messages.error(request, 'Kelas aktif tidak dapat dihapus.')
-        elif kelas.siswa_list.exists() or kelas.penugasan.exists():
+        elif (
+            kelas.siswa_list.exists()
+            or kelas.enrollments.exists()
+            or kelas.penugasan.exists()
+        ):
             messages.error(request, 'Kelas memiliki data siswa atau pembagian mengajar. Hapus datanya terlebih dahulu.')
         else:
             nama = kelas.nama_lengkap
-            kelas.delete()
-            messages.success(request, f'Kelas {nama} dihapus.')
+            try:
+                kelas.delete()
+            except ProtectedError:
+                messages.error(request, 'Kelas masih dirujuk riwayat penempatan siswa.')
+            else:
+                messages.success(request, f'Kelas {nama} dihapus.')
     return redirect('akademik:tahun_list')
 
 
@@ -1400,9 +1442,9 @@ def _subject_context(request):
 
 
 def _boleh_ekspor_impor(request, kind, subject=None):
-    if kind in ('siswa', 'guru', 'mapel'):
+    if kind in ('siswa', 'guru', 'mapel', 'kelas'):
         return is_admin(request.user)
-    if kind in ('tp', 'formatif', 'sumatif'):
+    if kind in ('tp', 'formatif', 'sumatif', 'cp', 'materi', 'tugas'):
         return subject is not None and boleh_kelola_mapel(request.user, subject)
     if kind in ('catatan', 'ekskul'):
         return can_manage_homeroom(request.user, _kelas())
@@ -1418,8 +1460,16 @@ def _kembali_ekspor_impor(kind, subject=None):
         return reverse('akademik:guru_list')
     if kind == 'mapel':
         return reverse('akademik:mapel_list')
+    if kind == 'kelas':
+        return reverse('akademik:tahun_list')
     if kind == 'tp':
         return reverse('akademik:tp_list', args=[subject.id])
+    if kind == 'cp':
+        return reverse('akademik:cp_list', args=[subject.id])
+    if kind == 'materi':
+        return reverse('akademik:materi_list', args=[subject.id])
+    if kind == 'tugas':
+        return reverse('akademik:tugas_pembelajaran_list', args=[subject.id])
     if kind == 'formatif':
         return reverse('akademik:formatif_entry', args=[subject.id])
     if kind == 'sumatif':
@@ -1459,8 +1509,19 @@ def ekspor_data(request, kind):
         if tahun_id:
             tahun = AcademicYear.objects.filter(pk=tahun_id).first() or tahun
         return excel_io.export_mapel(kelas, tahun, template)
+    if kind == 'kelas':
+        tahun_id = request.GET.get('tahun')
+        if tahun_id:
+            tahun = AcademicYear.objects.filter(pk=tahun_id).first() or tahun
+        return excel_io.export_kelas(tahun, template)
     if kind == 'tp':
         return excel_io.export_tp(subject, tahun, template)
+    if kind == 'cp':
+        return excel_io.export_cp(subject, template)
+    if kind == 'materi':
+        return excel_io.export_materi(subject, template)
+    if kind == 'tugas':
+        return excel_io.export_tugas(subject, template)
     if kind == 'formatif':
         return excel_io.export_formatif(subject, semester, kelas, template)
     if kind == 'sumatif':
@@ -1492,17 +1553,26 @@ def impor_data(request, kind):
     kelas = _kelas()
     semester = _semester()
     tahun = semester.academic_year if semester else None
+    tahun_id = request.GET.get('tahun') or request.POST.get('tahun')
+    if tahun_id:
+        tahun = AcademicYear.objects.filter(pk=tahun_id).first() or tahun
     wali = get_teacher(request.user) or (kelas.wali_kelas_guru if kelas else None)
     back = _kembali_ekspor_impor(kind, subject)
-    query = f'?mapel={subject.id}&' if subject else '?'
+    params = []
+    if subject:
+        params.append(f'mapel={subject.id}')
+    if kind == 'kelas' and tahun:
+        params.append(f'tahun={tahun.id}')
+    query = ('?' + '&'.join(params)) if params else '?'
     ctx = {
         'info': info,
         'kind': kind,
         'subject': subject,
         'kelas': kelas,
         'semester': semester,
+        'tahun': tahun,
         'back_url': back,
-        'template_url': reverse('akademik:ekspor', args=[kind]) + query + 'template=1',
+        'template_url': reverse('akademik:ekspor', args=[kind]) + query + ('&' if params else '') + 'template=1',
     }
 
     if request.method == 'POST':
@@ -1513,7 +1583,11 @@ def impor_data(request, kind):
         if not file_obj.name.lower().endswith(('.xlsx', '.xlsm')):
             messages.error(request, 'File harus berformat .xlsx.')
             return render(request, 'akademik/import_data.html', ctx)
-        if kind != 'guru' and (semester is None or kelas is None):
+        if kind == 'kelas':
+            if tahun is None:
+                messages.error(request, 'Pilih tahun pelajaran terlebih dahulu.')
+                return redirect('akademik:tahun_list')
+        elif kind != 'guru' and (semester is None or kelas is None):
             messages.error(request, 'Lengkapi pengaturan tahun pelajaran dan kelas terlebih dahulu.')
             return redirect('akademik:tahun_list')
 
@@ -1525,8 +1599,16 @@ def impor_data(request, kind):
                 hasil = excel_io.import_guru(file_obj, kelas, tahun)
             elif kind == 'mapel':
                 hasil = excel_io.import_mapel(file_obj, kelas, tahun)
+            elif kind == 'kelas':
+                hasil = excel_io.import_kelas(file_obj, tahun)
             elif kind == 'tp':
                 hasil = excel_io.import_tp(file_obj, subject, tahun, guru_mapel)
+            elif kind == 'cp':
+                hasil = excel_io.import_cp(file_obj, subject)
+            elif kind == 'materi':
+                hasil = excel_io.import_materi(file_obj, subject)
+            elif kind == 'tugas':
+                hasil = excel_io.import_tugas(file_obj, subject)
             elif kind == 'formatif':
                 hasil = excel_io.import_formatif(file_obj, subject, semester, kelas, guru_mapel)
             elif kind == 'sumatif':
@@ -1686,6 +1768,764 @@ def tugas_form(request, pk=None):
         'form': form,
         'tugas': instance,
         'tahun': tahun,
+    })
+
+
+# ---------------- Capaian Pembelajaran (CP) ----------------
+
+def _filter_mapel_dari_request(request, subject_id=None):
+    """Kembalikan (allowed_subjects, subject_terpilih, mapel_filter)."""
+    allowed = _mapel_boleh(request.user)
+    subject = None
+    if subject_id:
+        subject = get_object_or_404(allowed, pk=subject_id)
+    mapel_filter = str(subject.id) if subject else (request.GET.get('mapel') or '')
+    if subject is None and mapel_filter:
+        if str(mapel_filter).isdigit():
+            subject = allowed.filter(pk=mapel_filter).first()
+        else:
+            mapel_filter = ''
+    return allowed, subject, mapel_filter
+
+
+def _status_filter_qs(qs, status):
+    if status == 'aktif':
+        return qs.filter(aktif=True)
+    if status == 'arsip':
+        return qs.filter(aktif=False)
+    return qs
+
+
+@login_required
+def cp_list(request, subject_id=None):
+    tahun = _tahun_aktif()
+    allowed, subject, mapel_filter = _filter_mapel_dari_request(request, subject_id)
+    if subject is not None:
+        tahun = subject.academic_year
+    q = _q(request)
+    status = request.GET.get('status') or 'aktif'
+    qs = LearningOutcome.objects.filter(subject__in=allowed).select_related('subject')
+    if tahun:
+        qs = qs.filter(subject__academic_year=tahun)
+    if mapel_filter:
+        qs = qs.filter(subject_id=mapel_filter)
+    if q:
+        qs = qs.filter(Q(kode__icontains=q) | Q(deskripsi__icontains=q))
+    qs = _status_filter_qs(qs, status)
+    page_obj = _paginate(request, qs.order_by('subject__urutan', 'urutan', 'kode'))
+
+    if request.method == 'POST':
+        aksi = request.POST.get('aksi', '')
+        cp = get_object_or_404(
+            LearningOutcome, pk=request.POST.get('cp_id'),
+            subject__in=allowed,
+        )
+        if aksi == 'aktifkan':
+            cp.aktif = True
+            cp.save(update_fields=['aktif'])
+            messages.success(request, 'Capaian pembelajaran diaktifkan kembali.')
+        elif aksi == 'hapus':
+            if cp.tujuan_list.exists():
+                cp.aktif = False
+                cp.save(update_fields=['aktif'])
+                messages.success(
+                    request,
+                    'CP masih dipakai TP sehingga diarsipkan, bukan dihapus.',
+                )
+            else:
+                cp.delete()
+                messages.success(request, 'Capaian pembelajaran dihapus.')
+        return redirect(request.get_full_path())
+
+    return render(request, 'akademik/cp_list.html', {
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'subjects': allowed.annotate(
+            jumlah_cp=Count('capaian_list', filter=Q(capaian_list__aktif=True))
+        ),
+        'subject': subject,
+        'mapel_filter': mapel_filter,
+        'q': q,
+        'status_filter': status,
+        'tahun': tahun,
+        'active_tab': 'cp',
+    })
+
+
+@login_required
+def cp_form(request, pk=None):
+    tahun = _tahun_aktif()
+    allowed = _mapel_boleh(request.user)
+    instance = None
+    if pk:
+        instance = get_object_or_404(LearningOutcome, pk=pk)
+        if not allowed.filter(pk=instance.subject_id).exists():
+            return _tolak_mapel(request)
+        tahun = instance.subject.academic_year
+
+    if request.method == 'POST':
+        form = CapaianPembelajaranForm(request.POST, instance=instance)
+        form.fields['subject'].queryset = allowed
+        if form.is_valid():
+            subject = form.cleaned_data['subject']
+            if not allowed.filter(pk=subject.pk).exists():
+                return _tolak_mapel(request)
+            obj = form.save(commit=False)
+            obj.subject = subject
+            if not obj.urutan:
+                if instance is not None and instance.urutan:
+                    obj.urutan = instance.urutan
+                else:
+                    obj.urutan = (
+                        LearningOutcome.objects.filter(subject=subject)
+                        .exclude(pk=obj.pk)
+                        .order_by('-urutan').values_list('urutan', flat=True).first()
+                        or 0
+                    ) + 1
+            obj.save()
+            messages.success(request, 'Capaian pembelajaran disimpan.')
+            return redirect('akademik:cp_list', subject_id=subject.id)
+    else:
+        initial = {}
+        mapel_id = request.GET.get('mapel')
+        if mapel_id:
+            subject = allowed.filter(pk=mapel_id).first()
+            if subject:
+                initial['subject'] = subject
+                kelas_awal = ClassGroup.objects.filter(
+                    academic_year=subject.academic_year
+                ).first()
+                initial['fase'] = kelas_awal.fase if kelas_awal else 'D'
+        form = CapaianPembelajaranForm(instance=instance, initial=initial)
+        form.fields['subject'].queryset = allowed
+    return render(request, 'akademik/cp_form.html', {
+        'form': form,
+        'cp': instance,
+        'tahun': tahun,
+    })
+
+
+# ---------------- Materi Pembelajaran ----------------
+
+@login_required
+def materi_list(request, subject_id=None):
+    tahun = _tahun_aktif()
+    allowed, subject, mapel_filter = _filter_mapel_dari_request(request, subject_id)
+    if subject is not None:
+        tahun = subject.academic_year
+    q = _q(request)
+    status = request.GET.get('status') or 'aktif'
+    qs = LearningMaterial.objects.filter(subject__in=allowed).select_related('subject')
+    if tahun:
+        qs = qs.filter(subject__academic_year=tahun)
+    if mapel_filter:
+        qs = qs.filter(subject_id=mapel_filter)
+    if q:
+        qs = qs.filter(
+            Q(kode__icontains=q) | Q(judul__icontains=q) | Q(deskripsi__icontains=q)
+        )
+    qs = _status_filter_qs(qs, status).prefetch_related('objectives')
+    page_obj = _paginate(request, qs.order_by('subject__urutan', 'urutan', 'judul'))
+
+    if request.method == 'POST':
+        aksi = request.POST.get('aksi', '')
+        materi = get_object_or_404(
+            LearningMaterial, pk=request.POST.get('materi_id'),
+            subject__in=allowed,
+        )
+        if aksi == 'aktifkan':
+            materi.aktif = True
+            materi.save(update_fields=['aktif'])
+            messages.success(request, 'Materi diaktifkan kembali.')
+        elif aksi == 'hapus':
+            materi.delete()
+            messages.success(request, 'Materi pembelajaran dihapus.')
+        return redirect(request.get_full_path())
+
+    return render(request, 'akademik/materi_list.html', {
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'subjects': allowed.annotate(
+            jumlah_materi=Count('materi_list', filter=Q(materi_list__aktif=True))
+        ),
+        'subject': subject,
+        'mapel_filter': mapel_filter,
+        'q': q,
+        'status_filter': status,
+        'tahun': tahun,
+        'active_tab': 'materi',
+    })
+
+
+@login_required
+def materi_form(request, pk=None):
+    tahun = _tahun_aktif()
+    allowed = _mapel_boleh(request.user)
+    instance = None
+    if pk:
+        instance = get_object_or_404(LearningMaterial, pk=pk)
+        if not allowed.filter(pk=instance.subject_id).exists():
+            return _tolak_mapel(request)
+        tahun = instance.subject.academic_year
+
+    if request.method == 'POST':
+        form = MateriPembelajaranForm(request.POST, instance=instance)
+        form.fields['subject'].queryset = allowed
+        form.fields['objectives'].queryset = LearningObjective.objects.filter(
+            subject__in=allowed, aktif=True
+        ).select_related('subject')
+        if form.is_valid():
+            subject = form.cleaned_data['subject']
+            if not allowed.filter(pk=subject.pk).exists():
+                return _tolak_mapel(request)
+            obj = form.save(commit=False)
+            obj.subject = subject
+            if not obj.urutan:
+                if instance is not None and instance.urutan:
+                    obj.urutan = instance.urutan
+                else:
+                    obj.urutan = (
+                        LearningMaterial.objects.filter(subject=subject)
+                        .exclude(pk=obj.pk)
+                        .order_by('-urutan').values_list('urutan', flat=True).first()
+                        or 0
+                    ) + 1
+            obj.save()
+            form.save_m2m()
+            messages.success(request, 'Materi pembelajaran disimpan.')
+            return redirect('akademik:materi_list', subject_id=subject.id)
+    else:
+        initial = {}
+        mapel_id = request.GET.get('mapel')
+        if mapel_id:
+            subject = allowed.filter(pk=mapel_id).first()
+            if subject:
+                initial['subject'] = subject
+        form = MateriPembelajaranForm(instance=instance, initial=initial)
+        form.fields['subject'].queryset = allowed
+        form.fields['objectives'].queryset = LearningObjective.objects.filter(
+            subject__in=allowed, aktif=True
+        ).select_related('subject')
+    return render(request, 'akademik/materi_form.html', {
+        'form': form,
+        'materi': instance,
+        'tahun': tahun,
+    })
+
+
+# ---------------- Tugas Pembelajaran ----------------
+
+@login_required
+def tugas_pembelajaran_list(request, subject_id=None):
+    tahun = _tahun_aktif()
+    allowed, subject, mapel_filter = _filter_mapel_dari_request(request, subject_id)
+    if subject is not None:
+        tahun = subject.academic_year
+    q = _q(request)
+    status = request.GET.get('status') or ''
+    qs = LearningTask.objects.filter(subject__in=allowed).select_related(
+        'subject', 'created_by'
+    ).prefetch_related('class_groups', 'objectives')
+    if tahun:
+        qs = qs.filter(academic_year=tahun)
+    if mapel_filter:
+        qs = qs.filter(subject_id=mapel_filter)
+    if q:
+        qs = qs.filter(
+            Q(judul__icontains=q) | Q(deskripsi__icontains=q)
+            | Q(instruksi__icontains=q)
+        )
+    if status in ('DRAF', 'TERBIT', 'TUTUP'):
+        qs = qs.filter(status=status)
+    page_obj = _paginate(request, qs)
+
+    if request.method == 'POST':
+        aksi = request.POST.get('aksi', '')
+        tugas = get_object_or_404(
+            LearningTask, pk=request.POST.get('tugas_id'), subject__in=allowed,
+        )
+        if aksi == 'hapus':
+            if tugas.submissions.exists():
+                messages.error(
+                    request,
+                    'Tugas sudah memiliki pengumpulan/nilai. Tutup tugas saja, '
+                    'jangan dihapus.',
+                )
+            else:
+                tugas.delete()
+                messages.success(request, 'Tugas pembelajaran dihapus.')
+        elif aksi in ('DRAF', 'TERBIT', 'TUTUP'):
+            tugas.status = aksi
+            tugas.save(update_fields=['status'])
+            messages.success(request, f'Status tugas diubah menjadi {tugas.get_status_display()}.')
+        return redirect(request.get_full_path())
+
+    return render(request, 'akademik/tugas_list.html', {
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'subjects': allowed.annotate(
+            jumlah_tugas=Count('tugas_pembelajaran', filter=Q(tugas_pembelajaran__academic_year=tahun))
+        ),
+        'subject': subject,
+        'mapel_filter': mapel_filter,
+        'q': q,
+        'status_filter': status,
+        'tahun': tahun,
+        'active_tab': 'tugas',
+        'status_choices': LearningTask.STATUS,
+    })
+
+
+@login_required
+def tugas_pembelajaran_form(request, pk=None):
+    tahun = _tahun_aktif()
+    allowed = _mapel_boleh(request.user)
+    instance = None
+    if pk:
+        instance = get_object_or_404(LearningTask, pk=pk)
+        if not allowed.filter(pk=instance.subject_id).exists():
+            return _tolak_mapel(request)
+        tahun = instance.academic_year
+
+    def siapkan_pilihan(form):
+        form.fields['subject'].queryset = allowed
+        form.fields['class_groups'].queryset = ClassGroup.objects.filter(
+            academic_year=tahun
+        ).order_by('tingkat', 'nama') if tahun else ClassGroup.objects.none()
+        form.fields['objectives'].queryset = LearningObjective.objects.filter(
+            subject__in=allowed, academic_year=tahun, aktif=True
+        ).select_related('subject').order_by('subject__urutan', 'nomor')
+
+    if request.method == 'POST':
+        form = TugasPembelajaranForm(request.POST, request.FILES, instance=instance)
+        siapkan_pilihan(form)
+        if form.is_valid():
+            subject = form.cleaned_data['subject']
+            if not allowed.filter(pk=subject.pk).exists():
+                return _tolak_mapel(request)
+            if subject.academic_year_id != (tahun.id if tahun else None):
+                form.add_error('subject', 'Mapel tidak berada pada tahun pelajaran aktif.')
+            else:
+                obj = form.save(commit=False)
+                obj.subject = subject
+                obj.academic_year = subject.academic_year
+                if not obj.created_by_id:
+                    obj.created_by = guru_penilai(request.user, subject)
+                obj.save()
+                form.save_m2m()
+                messages.success(request, 'Tugas pembelajaran disimpan.')
+                return redirect('akademik:tugas_pembelajaran_list', subject_id=subject.id)
+    else:
+        initial = {}
+        mapel_id = request.GET.get('mapel')
+        if mapel_id:
+            subject = allowed.filter(pk=mapel_id).first()
+            if subject:
+                initial['subject'] = subject
+        form = TugasPembelajaranForm(instance=instance, initial=initial)
+        siapkan_pilihan(form)
+    return render(request, 'akademik/tugas_form.html', {
+        'form': form,
+        'tugas': instance,
+        'tahun': tahun,
+    })
+
+
+@login_required
+def tugas_pembelajaran_detail(request, pk):
+    allowed = _mapel_boleh(request.user)
+    tugas = get_object_or_404(
+        LearningTask.objects.select_related('subject').prefetch_related(
+            'class_groups', 'objectives'
+        ),
+        pk=pk, subject__in=allowed,
+    )
+    kelas_qs = tugas.class_groups.all()
+    if not kelas_qs.exists():
+        kelas_qs = ClassGroup.objects.filter(academic_year=tugas.academic_year)
+    kelas_id = request.GET.get('kelas') or request.POST.get('kelas')
+    if not str(kelas_id or '').isdigit():
+        kelas_id = None
+    kelas = kelas_qs.filter(pk=kelas_id).first() if kelas_id else None
+    if kelas is None:
+        kelas = kelas_qs.filter(aktif=True).first() or kelas_qs.first()
+    students = (
+        Student.objects.in_class(kelas).filter(aktif=True).order_by('no_urut')
+        if kelas else Student.objects.none()
+    )
+    students = list(students)
+
+    if request.method == 'POST':
+        jumlah = 0
+        with transaction.atomic():
+            for siswa in students:
+                status = request.POST.get(f'status_{siswa.id}') or 'BELUM'
+                nilai = _angka_bulat(request.POST.get(f'nilai_{siswa.id}'))
+                berkas = request.FILES.get(f'file_{siswa.id}')
+                if nilai is not None and status == 'BELUM':
+                    status = 'DINILAI'
+                elif berkas and status == 'BELUM':
+                    status = 'TERKUMPUL'
+                catatan = request.POST.get(f'catatan_{siswa.id}', '').strip()
+                hapus_berkas = request.POST.get(f'hapus_file_{siswa.id}')
+                if (
+                    status == 'BELUM' and nilai is None and not catatan
+                    and not berkas and not hapus_berkas
+                ):
+                    LearningTaskSubmission.objects.filter(
+                        task=tugas, student=siswa
+                    ).delete()
+                    continue
+                defaults = {
+                    'status': status,
+                    'nilai': nilai,
+                    'catatan_guru': catatan,
+                }
+                if status == 'DINILAI' or nilai is not None:
+                    defaults['dinilai_oleh'] = guru_penilai(request.user, tugas.subject)
+                if berkas:
+                    defaults['file'] = berkas
+                elif hapus_berkas:
+                    defaults['file'] = None
+                submission, _ = LearningTaskSubmission.objects.update_or_create(
+                    task=tugas, student=siswa, defaults=defaults,
+                )
+                if submission.status in ('TERKUMPUL', 'TERLAMBAT', 'DINILAI'):
+                    if submission.submitted_at is None:
+                        submission.submitted_at = timezone.now()
+                        submission.save(update_fields=['submitted_at'])
+                if submission.status == 'DINILAI' and submission.dinilai_at is None:
+                    submission.dinilai_at = timezone.now()
+                    submission.save(update_fields=['dinilai_at'])
+                jumlah += 1
+        messages.success(request, f'Pengumpulan tugas disimpan ({jumlah} siswa).')
+        return redirect(request.get_full_path())
+
+    submissions = {
+        s.student_id: s for s in LearningTaskSubmission.objects.filter(
+            task=tugas, student__in=students
+        )
+    }
+    rows = [{'siswa': siswa, 'pengumpulan': submissions.get(siswa.id)} for siswa in students]
+    return render(request, 'akademik/tugas_detail.html', {
+        'tugas': tugas,
+        'kelas_qs': kelas_qs,
+        'kelas': kelas,
+        'rows': rows,
+        'status_choices': LearningTaskSubmission.STATUS,
+    })
+
+
+
+# ---------------- Asesmen Generik & Konfigurasi Nilai ----------------
+
+@login_required
+def asesmen_list(request):
+    tahun = _tahun_aktif()
+    semester = _semester()
+    allowed = _mapel_boleh(request.user)
+    q = _q(request)
+    mapel_filter = request.GET.get('mapel') or ''
+    kategori = request.GET.get('kategori') or ''
+    status = request.GET.get('status') or ''
+    qs = Assessment.objects.filter(subject__in=allowed).select_related(
+        'subject', 'semester', 'class_group'
+    ).prefetch_related('components')
+    if semester:
+        qs = qs.filter(semester=semester)
+    if mapel_filter:
+        qs = qs.filter(subject_id=mapel_filter)
+    if kategori in dict(Assessment.KATEGORI):
+        qs = qs.filter(kategori=kategori)
+    if status in dict(Assessment.STATUS):
+        qs = qs.filter(status=status)
+    if q:
+        qs = qs.filter(Q(nama__icontains=q) | Q(deskripsi__icontains=q))
+    page_obj = _paginate(request, qs)
+
+    if request.method == 'POST':
+        asesmen = get_object_or_404(
+            Assessment, pk=request.POST.get('asesmen_id'), subject__in=allowed
+        )
+        aksi = request.POST.get('aksi')
+        if aksi == 'hapus':
+            if asesmen.components.filter(results__isnull=False).exists():
+                asesmen.aktif = False
+                asesmen.save(update_fields=['aktif'])
+                messages.success(request, 'Asesmen memiliki nilai sehingga diarsipkan.')
+            else:
+                asesmen.delete()
+                messages.success(request, 'Asesmen dihapus.')
+        elif aksi == 'aktifkan':
+            asesmen.aktif = True
+            asesmen.save(update_fields=['aktif'])
+        return redirect(request.get_full_path())
+
+    return render(request, 'akademik/asesmen_list.html', {
+        'rows': page_obj,
+        'page_obj': page_obj,
+        'subjects': allowed,
+        'mapel_filter': mapel_filter,
+        'kategori_filter': kategori,
+        'status_filter': status,
+        'kategori_choices': Assessment.KATEGORI,
+        'tahun': tahun,
+        'semester': semester,
+        'q': q,
+    })
+
+
+@login_required
+def asesmen_form(request, pk=None):
+    allowed = _mapel_boleh(request.user)
+    semester = _semester()
+    instance = None
+    if pk:
+        instance = get_object_or_404(Assessment, pk=pk, subject__in=allowed)
+        semester = instance.semester
+
+    if request.method == 'POST':
+        form = AssessmentForm(request.POST, instance=instance)
+        form.fields['subject'].queryset = allowed
+        form.fields['class_group'].queryset = ClassGroup.objects.filter(
+            academic_year=semester.academic_year if semester else None
+        ) if semester else ClassGroup.objects.none()
+        formset = AssessmentComponentFormSet(
+            request.POST, instance=instance or Assessment()
+        )
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.academic_year = obj.subject.academic_year
+            obj.semester = semester
+            if not obj.created_by_id:
+                obj.created_by = guru_penilai(request.user, obj.subject)
+            obj.save()
+            formset = AssessmentComponentFormSet(request.POST, instance=obj)
+            if formset.is_valid():
+                formset.save()
+                if not obj.components.exists():
+                    maksimal = 4 if obj.kategori == 'FORMATIF' else 100
+                    AssessmentComponent.objects.create(
+                        assessment=obj, nama='Nilai', tipe='NILAI',
+                        urutan=1, bobot=100, nilai_maksimal=maksimal,
+                    )
+                messages.success(request, 'Asesmen disimpan.')
+                return redirect('akademik:asesmen_grid', pk=obj.id)
+            messages.error(request, 'Periksa komponen asesmen.')
+            instance = obj
+        else:
+            messages.error(request, 'Periksa data asesmen.')
+    else:
+        form = AssessmentForm(instance=instance)
+        form.fields['subject'].queryset = allowed
+        form.fields['class_group'].queryset = ClassGroup.objects.filter(
+            academic_year=semester.academic_year
+        ) if semester else ClassGroup.objects.none()
+        formset = AssessmentComponentFormSet(instance=instance)
+
+    return render(request, 'akademik/asesmen_form.html', {
+        'form': form,
+        'formset': formset,
+        'asesmen': instance,
+        'semester': semester,
+    })
+
+
+def _kelas_asesmen(asesmen, request):
+    if asesmen.class_group_id:
+        return asesmen.class_group
+    kelas_qs = ClassGroup.objects.filter(academic_year=asesmen.academic_year)
+    kelas_id = request.GET.get('kelas') or request.POST.get('kelas')
+    if str(kelas_id or '').isdigit():
+        kelas = kelas_qs.filter(pk=kelas_id).first()
+        if kelas:
+            return kelas
+    return kelas_qs.filter(aktif=True).first() or kelas_qs.first()
+
+
+@login_required
+def asesmen_grid(request, pk):
+    allowed = _mapel_boleh(request.user)
+    asesmen = get_object_or_404(
+        Assessment.objects.select_related('subject', 'semester', 'class_group'),
+        pk=pk, subject__in=allowed,
+    )
+    kelas = _kelas_asesmen(asesmen, request)
+    students = (
+        list(Student.objects.in_class(kelas).filter(aktif=True).order_by('no_urut'))
+        if kelas else []
+    )
+    components = list(asesmen.components.all())
+    hasil = {}
+    for result in AssessmentResult.objects.filter(
+        student__in=students, component__in=components
+    ):
+        hasil[(result.student_id, result.component_id)] = result
+
+    if request.method == 'POST':
+        jumlah = 0
+        with transaction.atomic():
+            for siswa in students:
+                for component in components:
+                    raw = request.POST.get(f'n_{siswa.id}_{component.id}')
+                    nilai = _angka_bulat(raw, 0, float(component.nilai_maksimal))
+                    if raw in (None, ''):
+                        AssessmentResult.objects.filter(
+                            student=siswa, component=component
+                        ).delete()
+                        continue
+                    if nilai is None:
+                        continue
+                    AssessmentResult.objects.update_or_create(
+                        student=siswa, component=component,
+                        defaults={
+                            'nilai': nilai,
+                            'dinilai_oleh': get_teacher(request.user)
+                            or guru_penilai(request.user, asesmen.subject),
+                        },
+                    )
+                    jumlah += 1
+        messages.success(request, f'Nilai asesmen disimpan ({jumlah} nilai).')
+        return redirect(request.get_full_path())
+
+    rows = [
+        {
+            'siswa': siswa,
+            'nilai': [
+                {'component': component, 'hasil': hasil.get((siswa.id, component.id))}
+                for component in components
+            ],
+        }
+        for siswa in students
+    ]
+    kelas_qs = ClassGroup.objects.filter(academic_year=asesmen.academic_year)
+    return render(request, 'akademik/asesmen_grid.html', {
+        'asesmen': asesmen,
+        'components': components,
+        'rows': rows,
+        'kelas': kelas,
+        'kelas_qs': kelas_qs,
+        'semester': asesmen.semester,
+    })
+
+
+@login_required
+def asesmen_simpan(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST diperlukan.'}, status=405)
+    allowed = _mapel_boleh(request.user)
+    asesmen = get_object_or_404(Assessment, pk=pk, subject__in=allowed)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'ok': False, 'error': 'Data tidak valid.'}, status=400)
+    component = asesmen.components.filter(pk=data.get('component')).first()
+    student = Student.objects.filter(pk=data.get('student')).first()
+    if component is None or student is None:
+        return JsonResponse({'ok': False, 'error': 'Komponen/siswa tidak ditemukan.'}, status=404)
+    if not student.enrollments.filter(academic_year=asesmen.academic_year).exists():
+        return JsonResponse(
+            {'ok': False, 'error': 'Siswa tidak terdaftar pada tahun asesmen.'}, status=400
+        )
+    raw = data.get('nilai')
+    if raw in (None, ''):
+        AssessmentResult.objects.filter(component=component, student=student).delete()
+        return JsonResponse({'ok': True, 'nilai': None})
+    try:
+        nilai = Decimal(str(raw).replace(',', '.'))
+    except (InvalidOperation, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Nilai tidak valid.'}, status=400)
+    if nilai < 0 or nilai > component.nilai_maksimal:
+        return JsonResponse(
+            {'ok': False, 'error': f'Nilai harus 0-{component.nilai_maksimal}.'},
+            status=400,
+        )
+    AssessmentResult.objects.update_or_create(
+        component=component, student=student,
+        defaults={
+            'nilai': nilai,
+            'dinilai_oleh': get_teacher(request.user)
+            or guru_penilai(request.user, asesmen.subject),
+        },
+    )
+    return JsonResponse({'ok': True, 'nilai': str(nilai)})
+
+
+@login_required
+def asesmen_ekspor(request, pk):
+    from . import excel_io
+
+    allowed = _mapel_boleh(request.user)
+    asesmen = get_object_or_404(Assessment, pk=pk, subject__in=allowed)
+    kelas = _kelas_asesmen(asesmen, request)
+    return excel_io.export_asesmen(asesmen, kelas)
+
+
+@login_required
+def asesmen_impor(request, pk):
+    from . import excel_io
+
+    allowed = _mapel_boleh(request.user)
+    asesmen = get_object_or_404(Assessment, pk=pk, subject__in=allowed)
+    kelas = _kelas_asesmen(asesmen, request)
+    if request.method == 'POST':
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            messages.error(request, 'Pilih file Excel.')
+        elif not file_obj.name.lower().endswith(('.xlsx', '.xlsm')):
+            messages.error(request, 'File harus berformat .xlsx.')
+        else:
+            try:
+                hasil = excel_io.import_asesmen(file_obj, asesmen, kelas)
+            except excel_io.ExcelImportError as exc:
+                for pesan in exc.errors[:8]:
+                    messages.error(request, pesan)
+            else:
+                messages.success(
+                    request, f"Nilai asesmen diimpor ({hasil['diperbarui']} sel)."
+                )
+        return redirect(f"{reverse('akademik:asesmen_grid', args=[asesmen.id])}?kelas={kelas.id if kelas else ''}")
+    return render(request, 'akademik/asesmen_impor.html', {
+        'asesmen': asesmen,
+        'kelas': kelas,
+    })
+
+
+@login_required
+@admin_required
+def konfigurasi_nilai_view(request):
+    konfigurasi = GradeConfiguration.get_config()
+    tahun_id = request.GET.get('tahun')
+    mapel_id = request.GET.get('mapel')
+    tahun = AcademicYear.objects.filter(pk=tahun_id).first() if str(tahun_id or '').isdigit() else None
+    mapel = Subject.objects.filter(pk=mapel_id).first() if str(mapel_id or '').isdigit() else None
+    if tahun or mapel:
+        konfigurasi = (
+            GradeConfiguration.objects.filter(
+                academic_year=tahun, subject=mapel, aktif=True
+            ).first()
+            or GradeConfiguration(academic_year=tahun, subject=mapel)
+        )
+    if request.method == 'POST':
+        form = GradeConfigurationForm(request.POST, instance=konfigurasi)
+        if form.is_valid():
+            obj = form.save()
+            catat_audit(
+                request.user, 'UPDATE', obj,
+                deskripsi='Perbarui konfigurasi nilai', request=request,
+            )
+            messages.success(request, 'Konfigurasi nilai disimpan.')
+            return redirect('akademik:konfigurasi_nilai')
+        messages.error(request, 'Periksa konfigurasi nilai.')
+    else:
+        form = GradeConfigurationForm(instance=konfigurasi)
+    return render(request, 'akademik/konfigurasi_nilai.html', {
+        'form': form,
+        'konfigurasi': konfigurasi,
+        'tahun': tahun,
+        'mapel': mapel,
+        'daftar_tahun': AcademicYear.objects.all(),
+        'daftar_mapel': Subject.objects.all(),
     })
 
 

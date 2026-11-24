@@ -1,0 +1,82 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if tugas %}Ubah Tugas{% else %}Tambah Tugas{% endif %}{% endblock %}
+{% block topbar %}{% if tugas %}Ubah Tugas{% else %}Tambah Tugas{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:tugas_pembelajaran_list' %}">Tugas Pembelajaran</a>
+  <span>/</span>
+  <span>{% if tugas %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if tugas %}{{ tugas.judul }}{% else %}Tugas Pembelajaran Baru{% endif %}</h2>
+    <p>Tahun pelajaran {{ tahun.tahun|default:"-" }}. Hubungkan tugas dengan TP dan kelas yang mengerjakan.</p>
+  </div>
+</div>
+
+<div style="max-width:900px">
+  <form method="post" id="form-tugas" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Data Tugas</h3></div>
+      <div class="panel-body">
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.subject.id_for_label }}">Mata Pelajaran</label>
+            {{ form.subject }}{{ form.subject.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.status.id_for_label }}">Status</label>
+            {{ form.status }}{{ form.status.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.judul.id_for_label }}">Judul Tugas</label>
+            {{ form.judul }}{{ form.judul.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.deskripsi.id_for_label }}">Deskripsi</label>
+            {{ form.deskripsi }}{{ form.deskripsi.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.instruksi.id_for_label }}">Instruksi Pengerjaan</label>
+            {{ form.instruksi }}{{ form.instruksi.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.tanggal_pemberian.id_for_label }}">Tanggal Pemberian</label>
+            {{ form.tanggal_pemberian }}{{ form.tanggal_pemberian.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.batas_pengumpulan.id_for_label }}">Batas Pengumpulan</label>
+            {{ form.batas_pengumpulan }}{{ form.batas_pengumpulan.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.bobot.id_for_label }}">Bobot (%)</label>
+            {{ form.bobot }}{{ form.bobot.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.lampiran.id_for_label }}">Lampiran</label>
+            {{ form.lampiran }}{{ form.lampiran.errors }}
+            <div class="help">{{ form.lampiran.help_text }}</div>
+          </div>
+          <div class="field full">
+            <label for="{{ form.class_groups.id_for_label }}">Kelas yang Mengerjakan</label>
+            {{ form.class_groups }}{{ form.class_groups.errors }}
+            <div class="help">{{ form.class_groups.help_text }}</div>
+          </div>
+          <div class="field full">
+            <label for="{{ form.objectives.id_for_label }}">Tujuan Pembelajaran Terkait</label>
+            {{ form.objectives }}{{ form.objectives.errors }}
+            <div class="help">{{ form.objectives.help_text }}</div>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:20px">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Tugas</button>
+          <a class="btn" href="{% url 'akademik:tugas_pembelajaran_list' %}{% if tugas %}?mapel={{ tugas.subject_id }}{% endif %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
