@@ -1650,7 +1650,7 @@ def _aktifkan_tahun_internal(tahun):
     Semester.objects.update(aktif=False)
     semester.aktif = True
     semester.save(update_fields=['aktif'])
-    kelas = tahun.kelas_list.order_by('tingkat', 'nama').first()
+    kelas = tahun.kelas_list.order_by('grade__urutan', 'nama').first()
     ClassGroup.objects.update(aktif=False)
     if kelas:
         kelas.aktif = True
@@ -1667,7 +1667,7 @@ def _aktifkan_semester_internal(semester):
     semester.save(update_fields=['aktif'])
     kelas = ClassGroup.objects.filter(academic_year=year, aktif=True).first()
     if kelas is None:
-        kelas = year.kelas_list.order_by('tingkat', 'nama').first()
+        kelas = year.kelas_list.order_by('grade__urutan', 'nama').first()
     ClassGroup.objects.update(aktif=False)
     if kelas:
         kelas.aktif = True
@@ -2535,7 +2535,7 @@ def tugas_pembelajaran_form(request, pk=None):
         form.fields['subject'].queryset = allowed
         form.fields['class_groups'].queryset = ClassGroup.objects.filter(
             academic_year=tahun
-        ).order_by('tingkat', 'nama') if tahun else ClassGroup.objects.none()
+        ).order_by('grade__urutan', 'nama') if tahun else ClassGroup.objects.none()
         form.fields['objectives'].queryset = LearningObjective.objects.filter(
             subject__in=allowed, academic_year=tahun, aktif=True
         ).select_related('subject').order_by('subject__urutan', 'nomor')

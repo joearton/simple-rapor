@@ -237,7 +237,7 @@ class ClassGroup(models.Model):
 
     class Meta:
         unique_together = [('academic_year', 'tingkat', 'nama')]
-        ordering = ['tingkat', 'nama']
+        ordering = ['grade__urutan', 'tingkat', 'nama']
         verbose_name = 'Kelas'
         verbose_name_plural = 'Kelas'
 

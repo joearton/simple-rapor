@@ -109,12 +109,12 @@
         <form class="period-form" id="period-form" method="post" action="{% url 'akademik:pilih_tahun_pelajaran' %}">
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ request.get_full_path }}">
-          <select name="tahun" id="period-year-select" class="form-input" aria-label="Pilih tahun pelajaran">
+          <select name="tahun" id="period-year-select" class="form-input" aria-label="Pilih tahun pelajaran" onchange="this.form.submit()">
             {% for tahun in daftar_tahun %}
             <option value="{{ tahun.id }}" {% if semester_aktif.academic_year_id == tahun.id %}selected{% endif %}>{{ tahun.tahun }}</option>
             {% endfor %}
           </select>
-          <button type="submit" class="btn btn-sm">Terapkan</button>
+          <noscript><button type="submit" class="btn btn-sm">Terapkan</button></noscript>
         </form>
         {% if kelas_aktif %}
         <form class="period-form" id="class-form" method="post" action="{% url 'akademik:pilih_kelas' %}">

@@ -434,7 +434,7 @@ def export_kelas(tahun, template=False):
     if not template and tahun:
         kelas_qs = ClassGroup.objects.filter(academic_year=tahun).select_related(
             'grade', 'wali_kelas_guru'
-        ).order_by('tingkat', 'nama')
+        ).order_by('grade__urutan', 'nama')
         for kelas in kelas_qs:
             ws.append([
                 kelas.grade.nama if kelas.grade_id else kelas.tingkat,
