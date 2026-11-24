@@ -25,6 +25,16 @@ Default pengembangan memakai SQLite. Untuk produksi skala sekolah, MariaDB
 disarankan. Perubahan skema tetap melalui migrasi Django; hindari mengubah
 tabel langsung.
 
+Data demo untuk pengecekan:
+
+```bash
+python manage.py seed_demo
+python manage.py seed_demo --force   # ganti data demo yang sudah ada
+```
+
+Akun demo memakai password `demo12345`:
+`demo_kepsek`, `demo_operator`, `demo_wali`, `demo_guru`, `demo_siswa`.
+
 ## 3. Backup
 
 SQLite:
