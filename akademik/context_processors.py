@@ -5,6 +5,7 @@ from .permissions import (
     is_admin,
     is_kepala_sekolah,
     is_operator,
+    is_portal_siswa,
     is_super_admin,
     is_wali_kelas,
     role_label,
@@ -24,5 +25,6 @@ def sekolah(request):
         'is_operator_sekolah': is_operator(user),
         'guru_login': get_teacher(user),
         'is_wali_kelas': is_wali_kelas(user),
+        'is_portal_siswa': is_portal_siswa(user),
         'role_label': role_label(user),
     }

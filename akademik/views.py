@@ -93,10 +93,12 @@ from .permissions import (
     guru_penilai,
     is_admin,
     is_kepala_sekolah,
+    is_portal_siswa,
     is_wali_kelas,
     can_view_reports,
     super_admin_required,
     mapel_untuk_user,
+    siswa_portal,
 )
 from .services import (
     MAX_LM,
@@ -120,6 +122,11 @@ class LoginSekolahView(LoginView):
     template_name = 'akademik/login.html'
     authentication_form = LoginForm
     redirect_authenticated_user = True
+
+    def get_success_url(self):
+        if is_portal_siswa(self.request.user):
+            return reverse('akademik:portal_dashboard')
+        return super().get_success_url()
 
 
 def logout_sekolah(request):
@@ -203,6 +210,8 @@ def _tolak_halaman(request):
 
 @login_required
 def dashboard(request):
+    if is_portal_siswa(request.user):
+        return redirect('akademik:portal_dashboard')
     semester = _semester()
     kelas = _kelas()
     admin = is_admin(request.user)
@@ -1027,6 +1036,48 @@ def rapor_pdf_semua(request):
     )
 
 
+# ---------------- Portal Siswa/Orang Tua ----------------
+
+@login_required
+def portal_dashboard(request):
+    students = list(siswa_portal(request.user))
+    cards = (
+        ReportCard.objects.filter(student__in=students, status='PUBLISHED')
+        .select_related('student', 'class_group', 'semester', 'semester__academic_year')
+        .order_by('-semester__academic_year__tahun', '-semester__nama')
+        if students else ReportCard.objects.none()
+    )
+    return render(request, 'akademik/portal_dashboard.html', {
+        'students': students,
+        'cards': cards,
+    })
+
+
+def _card_portal(request, card_id):
+    students = siswa_portal(request.user)
+    return get_object_or_404(
+        ReportCard.objects.select_related(
+            'student', 'class_group', 'semester', 'semester__academic_year'
+        ),
+        pk=card_id, status='PUBLISHED', student__in=students,
+    )
+
+
+@login_required
+def portal_rapor(request, card_id):
+    card = _card_portal(request, card_id)
+    return render(request, 'akademik/portal_rapor.html', konteks_rapor(card))
+
+
+@login_required
+def portal_rapor_pdf(request, card_id):
+    card = _card_portal(request, card_id)
+    data = konteks_rapor(card)
+    html = render_to_string('akademik/rapor_pdf.html', data, request=request)
+    nama = f'rapor-{card.student.nis or card.student.id}-{card.semester.nama}'
+    return _pdf_response(request, html, nama)
+
+
 @login_required
 @admin_required
 def guru_list(request):
@@ -1299,6 +1350,8 @@ def pengguna_list(request):
         qs = qs.filter(groups__name='Operator/Tata Usaha')
     elif role == 'guru':
         qs = qs.filter(guru__isnull=False).exclude(Q(is_staff=True) | Q(is_superuser=True))
+    elif role == 'siswa':
+        qs = qs.filter(student_profile__isnull=False)
     elif role == 'pengguna':
         qs = qs.filter(is_staff=False, is_superuser=False, guru__isnull=True)
     if status == 'aktif':
@@ -1309,13 +1362,16 @@ def pengguna_list(request):
     rows = []
     for user in page_obj:
         guru = getattr(user, 'guru', None)
+        siswa = getattr(user, 'student_profile', None)
         if user.is_staff or user.is_superuser:
             peran = 'Administrator'
         elif guru:
             peran = 'Guru'
+        elif siswa:
+            peran = 'Siswa/Orang Tua'
         else:
             peran = 'Pengguna'
-        rows.append({'user': user, 'guru': guru, 'peran': peran})
+        rows.append({'user': user, 'guru': guru, 'siswa': siswa, 'peran': peran})
     return render(request, 'akademik/pengguna_list.html', {
         'rows': rows,
         'page_obj': page_obj,

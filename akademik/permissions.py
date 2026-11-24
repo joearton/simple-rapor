@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group
 from django.db.models import Q
 from django.shortcuts import redirect
 
-from .models import ClassGroup, Semester, Teacher, TeachingAssignment
+from .models import ClassGroup, Semester, Student, Teacher, TeachingAssignment
 
 ROLE_SUPER = 'Super Admin'
 ROLE_KEPALA = 'Kepala Sekolah'
@@ -68,9 +68,29 @@ def role_label(user):
         return ROLE_KEPALA
     if get_teacher(user) is not None:
         return ROLE_GURU
-    if _in_group(user, ROLE_SISWA):
+    if Student.objects.filter(user=user).exists() or _in_group(user, ROLE_SISWA):
         return ROLE_SISWA
     return 'Pengguna'
+
+
+def is_portal_siswa(user):
+    """True untuk akun siswa/orang tua yang hanya boleh melihat rapor terbit."""
+    if not user.is_authenticated:
+        return False
+    if user.is_staff or is_super_admin(user) or is_operator(user) or is_kepala_sekolah(user):
+        return False
+    if get_teacher(user) is not None:
+        return False
+    return (
+        Student.objects.filter(user=user).exists()
+        or _in_group(user, ROLE_SISWA)
+    )
+
+
+def siswa_portal(user):
+    if not user.is_authenticated:
+        return Student.objects.none()
+    return Student.objects.filter(user=user).select_related('class_group')
 
 
 def active_semester():

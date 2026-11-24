@@ -100,12 +100,25 @@ Rancangan ini **belum mengubah skema inti** secara besar. Persetujuan diperlukan
 
 **Kriteria terima:** rapor terkunci tidak dapat diubah; PDF sesuai layout sekolah; cetak massal berhasil.
 
-## Tahap 6 — Portal siswa/orang tua (opsional)
+## Tahap 6 — Portal siswa/orang tua (selesai)
 - Akun siswa/guardian, hanya melihat rapor terbit, unduh PDF.
 
-## Tahap 7 — Hardening & dokumentasi final
-- Backup/restore teruji, deployment, dokumentasi 12 file, screenshot aktual.
+**Catatan implementasi:**
+- `Student.user` menghubungkan akun ke data siswa; akun diberi group
+  `Siswa/Orang Tua` dan diarahkan otomatis ke portal setelah login.
+- Portal hanya menampilkan `ReportCard` berstatus `PUBLISHED` milik siswa
+  yang terhubung; draf, review, dan rapor siswa lain tidak dapat diakses.
+- Admin dapat menghubungkan akun ke data siswa dari Manajemen Pengguna.
+
+## Tahap 7 — Hardening & dokumentasi final (dasar selesai)
+- Backup/restore teruji, deployment, dokumentasi, screenshot aktual.
 - Uji beban data satu angkatan.
+
+**Catatan implementasi:**
+- Perintah `backup_db` dan `restore_db` tersedia untuk SQLite; panduan
+  deployment/backup ada di `docs/deployment.md`.
+- Sisa pekerjaan: uji beban satu angkatan, screenshot aktual, dan dokumentasi
+  pengguna bergambar.
 
 ## Risiko dan mitigasi
 | Risiko | Mitigasi |

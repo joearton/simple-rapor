@@ -1,0 +1,65 @@
+{% extends 'akademik/portal_base.html' %}
+{% block title %}Rapor Saya{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Rapor Saya</h2>
+    <p>Hanya rapor yang sudah diterbitkan yang dapat dilihat dan diunduh.</p>
+  </div>
+</div>
+
+{% if students %}
+<div class="panel">
+  <div class="panel-head">
+    <h3>Data Siswa</h3>
+  </div>
+  <div class="panel-body">
+    {% for siswa in students %}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;padding:6px 0">
+      <strong>{{ siswa.nama }}</strong>
+      <span style="color:#6b7c74">NIS {{ siswa.nis|default:"-" }} &middot; {{ siswa.class_group.nama_lengkap }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>Daftar Rapor Terbit</h3>
+    <span class="hint">{{ cards|length }} rapor</span>
+  </div>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Semester</th>
+          <th>Tahun Pelajaran</th>
+          <th>Kelas</th>
+          <th class="num">Diterbitkan</th>
+          <th style="width:180px">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for card in cards %}
+        <tr>
+          <td class="nama">{{ card.semester.get_nama_display }}</td>
+          <td>{{ card.semester.academic_year.tahun }}</td>
+          <td>{{ card.class_group.nama_lengkap }}</td>
+          <td class="num">{{ card.published_at|date:"d/m/Y"|default:"-" }}</td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <a class="btn btn-sm btn-primary" href="{% url 'akademik:portal_rapor' card.id %}">Lihat Rapor</a>
+              <a class="btn btn-sm" href="{% url 'akademik:portal_rapor_pdf' card.id %}">Unduh PDF</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty"><strong>Belum ada rapor terbit</strong>Rapor akan muncul setelah sekolah menerbitkannya.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

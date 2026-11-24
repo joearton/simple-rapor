@@ -696,6 +696,10 @@ class Student(models.Model):
 
     objects = StudentQuerySet.as_manager()
 
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='student_profile', verbose_name='Akun Portal',
+    )
     class_group = models.ForeignKey(
         ClassGroup, on_delete=models.CASCADE, related_name='siswa_list'
     )

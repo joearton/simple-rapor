@@ -114,4 +114,8 @@ urlpatterns = [
     path('rapor/<int:pk>/buka-kunci/', views.rapor_buka_kunci, name='rapor_buka_kunci'),
     path('rapor/<int:pk>/kembalikan/', views.rapor_kembalikan, name='rapor_kembalikan'),
     path('rapor/<int:student_id>/sampul/', views.rapor_sampul, name='rapor_sampul'),
+
+    path('portal/', views.portal_dashboard, name='portal_dashboard'),
+    path('portal/rapor/<int:card_id>/', views.portal_rapor, name='portal_rapor'),
+    path('portal/rapor/<int:card_id>/pdf/', views.portal_rapor_pdf, name='portal_rapor_pdf'),
 ]

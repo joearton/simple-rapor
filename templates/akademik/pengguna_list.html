@@ -24,6 +24,7 @@
       <option value="">Semua peran</option>
       <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Administrator</option>
       <option value="guru" {% if role_filter == 'guru' %}selected{% endif %}>Guru</option>
+      <option value="siswa" {% if role_filter == 'siswa' %}selected{% endif %}>Siswa/Orang Tua</option>
       <option value="pengguna" {% if role_filter == 'pengguna' %}selected{% endif %}>Pengguna</option>
     </select>
     <select class="form-input" name="status">

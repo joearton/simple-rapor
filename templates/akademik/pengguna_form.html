@@ -69,6 +69,11 @@
             {{ form.guru }}{{ form.guru.errors }}
             <div class="help">Wajib untuk peran Guru. Pilih guru yang belum memiliki akun.</div>
           </div>
+          <div class="field">
+            <label for="{{ form.siswa.id_for_label }}">Data Siswa</label>
+            {{ form.siswa }}{{ form.siswa.errors }}
+            <div class="help">Wajib untuk peran Siswa/Orang Tua. Akun hanya dapat melihat rapor terbit.</div>
+          </div>
         </div>
           </div>
         </div>

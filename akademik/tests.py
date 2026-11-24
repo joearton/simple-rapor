@@ -1,11 +1,14 @@
 from decimal import Decimal
 from io import BytesIO
 import json
+from pathlib import Path
+import tempfile
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.core.management import call_command
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from openpyxl import Workbook, load_workbook
 
@@ -1929,3 +1932,141 @@ class Tahap5RaporTest(RaporTestBase):
         self.assertTrue(
             card.nilai_mapel.filter(subject=self.mapel).exists()
         )
+
+
+class Tahap6PortalTest(RaporTestBase):
+    """Tahap 6: portal siswa/orang tua hanya untuk rapor terbit."""
+
+    def setUp(self):
+        super().setUp()
+        self.siswa.user = User.objects.create_user(
+            'portal_siswa', password='rahasia123'
+        )
+        self.siswa.save(update_fields=['user'])
+        self.portal = self.siswa.user
+        self.other = Student.objects.create(
+            class_group=self.kelas, no_urut=2, nama='Siswa Lain',
+            nis='99', nisn='999',
+        )
+
+    def _terbitkan_card(self, student=None):
+        student = student or self.siswa
+        return ReportCard.objects.create(
+            student=student, semester=self.semester, class_group=self.kelas,
+            status='PUBLISHED',
+        )
+
+    def test_portal_hanya_menampilkan_rapor_terbit_miliknya(self):
+        card = self._terbitkan_card()
+        self._terbitkan_card(self.other)
+        self.client.force_login(self.portal)
+
+        dashboard = self.client.get(reverse('akademik:portal_dashboard'))
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, self.siswa.nama)
+        self.assertNotContains(dashboard, self.other.nama)
+
+        detail = self.client.get(reverse('akademik:portal_rapor', args=[card.id]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, self.siswa.nama)
+
+        pdf = self.client.get(reverse('akademik:portal_rapor_pdf', args=[card.id]))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.content.startswith(b'%PDF'))
+
+    def test_portal_tidak_bisa_melihat_rapor_draf_atau_siswa_lain(self):
+        card = self._terbitkan_card()
+        semester_2 = Semester.objects.create(
+            academic_year=self.tahun, nama='II'
+        )
+        draft = ReportCard.objects.create(
+            student=self.siswa, semester=semester_2, class_group=self.kelas,
+            status='DRAF',
+        )
+        card_lain = self._terbitkan_card(self.other)
+        self.client.force_login(self.portal)
+
+        self.assertEqual(
+            self.client.get(reverse('akademik:portal_rapor', args=[draft.id])).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse('akademik:portal_rapor', args=[card_lain.id])
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(reverse('akademik:portal_rapor', args=[card.id])).status_code,
+            200,
+        )
+
+    def test_portal_diarahkan_dan_tidak_bisa_membuka_halaman_admin(self):
+        self.client.force_login(self.portal)
+        response = self.client.get(reverse('akademik:dashboard'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('akademik:portal_dashboard'), response.url)
+        self.assertEqual(
+            self.client.get(reverse('akademik:rapor_index')).status_code, 302
+        )
+        self.assertEqual(
+            self.client.get(reverse('akademik:siswa_list')).status_code, 302
+        )
+
+    def test_admin_menghubungkan_akun_dengan_data_siswa(self):
+        admin = User.objects.create_superuser('admin_portal', 'p@uji.id', 'rahasia123')
+        self.client.force_login(admin)
+        response = self.client.post(reverse('akademik:pengguna_tambah'), {
+            'username': 'akun_siswa_baru',
+            'first_name': 'Akun',
+            'last_name': 'Siswa',
+            'email': 'siswa@uji.id',
+            'password': 'rahasia123',
+            'is_active': 'on',
+            'role': 'siswa',
+            'siswa': self.other.id,
+        })
+        self.assertEqual(response.status_code, 302)
+        user = User.objects.get(username='akun_siswa_baru')
+        self.other.refresh_from_db()
+        self.assertEqual(self.other.user, user)
+        self.assertTrue(user.groups.filter(name='Siswa/Orang Tua').exists())
+
+
+class Tahap7HardeningTest(TestCase):
+    """Tahap 7: perintah backup/restore SQLite."""
+
+    def test_backup_dan_restore_sqlite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sumber = Path(tmp) / 'db.sqlite3'
+            sumber.write_bytes(b'SQLite format 3\x00contoh')
+            cadangan = Path(tmp) / 'cadangan.sqlite3'
+            with override_settings(DATABASES={
+                'default': {
+                    'ENGINE': 'django.db.backends.sqlite3',
+                    'NAME': str(sumber),
+                },
+            }):
+                call_command('backup_db', output=str(cadangan))
+                self.assertTrue(cadangan.exists())
+                self.assertEqual(cadangan.read_bytes(), sumber.read_bytes())
+
+                sumber.write_bytes(b'diubah')
+                call_command('restore_db', file=str(cadangan), yes=True)
+                self.assertEqual(sumber.read_bytes(), cadangan.read_bytes())
+                self.assertTrue(
+                    list(Path(tmp).glob('db.sqlite3.sebelum-restore-*'))
+                )
+
+    def test_restore_butuh_konfirmasi(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sumber = Path(tmp) / 'db.sqlite3'
+            sumber.write_bytes(b'SQLite format 3\x00contoh')
+            with override_settings(DATABASES={
+                'default': {
+                    'ENGINE': 'django.db.backends.sqlite3',
+                    'NAME': str(sumber),
+                },
+            }):
+                with self.assertRaises(Exception):
+                    call_command('restore_db', file=str(sumber))

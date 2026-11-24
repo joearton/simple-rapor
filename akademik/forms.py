@@ -370,6 +370,7 @@ class UserForm(forms.ModelForm):
         ('kepala_sekolah', 'Kepala Sekolah'),
         ('operator', 'Operator/Tata Usaha'),
         ('guru', 'Guru Mata Pelajaran'),
+        ('siswa', 'Siswa/Orang Tua'),
         ('pengguna', 'Pengguna biasa'),
     ]
 
@@ -378,6 +379,7 @@ class UserForm(forms.ModelForm):
         'kepala_sekolah': 'Kepala Sekolah',
         'operator': 'Operator/Tata Usaha',
         'guru': 'Guru Mata Pelajaran',
+        'siswa': 'Siswa/Orang Tua',
         'pengguna': None,
     }
 
@@ -394,6 +396,12 @@ class UserForm(forms.ModelForm):
         required=False,
         help_text='Untuk peran guru, hubungkan ke profil Data Guru agar mendapat akses mapel.',
     )
+    siswa = forms.ModelChoiceField(
+        label='Terhubung ke Data Siswa',
+        queryset=Student.objects.none(),
+        required=False,
+        help_text='Untuk peran Siswa/Orang Tua, hubungkan ke data siswa agar dapat melihat rapor terbit.',
+    )
 
     class Meta:
         model = User
@@ -407,6 +415,13 @@ class UserForm(forms.ModelForm):
         else:
             guru_qs = Teacher.objects.filter(user__isnull=True)
         self.fields['guru'].queryset = guru_qs.select_related('user')
+        if self.instance.pk:
+            siswa_qs = Student.objects.filter(
+                Q(user__isnull=True) | Q(user=self.instance)
+            )
+        else:
+            siswa_qs = Student.objects.filter(user__isnull=True)
+        self.fields['siswa'].queryset = siswa_qs.select_related('class_group')
         if self.instance and self.instance.pk:
             groups = set(self.instance.groups.values_list('name', flat=True))
             if self.instance.is_superuser or 'Super Admin' in groups:
@@ -420,6 +435,11 @@ class UserForm(forms.ModelForm):
                 if self.fields['role'].initial == 'pengguna':
                     self.fields['role'].initial = 'guru'
                 self.fields['guru'].initial = teacher
+            siswa = Student.objects.filter(user=self.instance).first()
+            if siswa:
+                if self.fields['role'].initial == 'pengguna':
+                    self.fields['role'].initial = 'siswa'
+                self.fields['siswa'].initial = siswa
 
     def clean(self):
         cleaned = super().clean()
@@ -430,6 +450,8 @@ class UserForm(forms.ModelForm):
             self.add_error('password', 'Password minimal 6 karakter.')
         if cleaned.get('role') == 'guru' and not cleaned.get('guru'):
             self.add_error('guru', 'Pilih data guru untuk peran guru.')
+        if cleaned.get('role') == 'siswa' and not cleaned.get('siswa'):
+            self.add_error('siswa', 'Pilih data siswa untuk peran Siswa/Orang Tua.')
         if cleaned.get('role') == 'super_admin' and password and len(password) < 8:
             self.add_error('password', 'Password Super Admin minimal 8 karakter.')
         return cleaned
@@ -454,12 +476,21 @@ class UserForm(forms.ModelForm):
                 group, _ = Group.objects.get_or_create(name=target_group)
                 user.groups.add(group)
             guru = self.cleaned_data.get('guru')
-            if guru:
+            if role == 'guru' and guru:
                 Teacher.objects.filter(user=user).exclude(pk=guru.pk).update(user=None)
                 guru.user = user
                 guru.save(update_fields=['user'])
-            elif role == 'pengguna':
+            else:
                 Teacher.objects.filter(user=user).update(user=None)
+
+            siswa = self.cleaned_data.get('siswa')
+            if role == 'siswa' and siswa:
+                Student.objects.filter(user=user).exclude(pk=siswa.pk).update(user=None)
+                if siswa.user_id != user.id:
+                    siswa.user = user
+                    siswa.save(update_fields=['user'])
+            else:
+                Student.objects.filter(user=user).update(user=None)
         return user
 
 
