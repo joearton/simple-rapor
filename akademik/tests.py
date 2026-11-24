@@ -1086,6 +1086,7 @@ class Tahap2StrukturTest(RaporTestBase):
         self.assertEqual(enrollment.class_group, self.kelas)
         self.assertEqual(enrollment.academic_year, self.tahun)
         self.assertEqual(enrollment.status, 'AKTIF')
+        self.assertEqual(self.siswa.tahun_masuk, self.tahun)
 
     def test_pindah_kelas_dalam_tahun_sama_memperbarui_enrollment(self):
         kelas_baru = ClassGroup.objects.create(
@@ -1113,6 +1114,8 @@ class Tahap2StrukturTest(RaporTestBase):
         baru = self.siswa.enrollment_for(tahun_baru)
         self.assertEqual(lama.class_group, self.kelas)
         self.assertEqual(baru.class_group, kelas_baru)
+        # Tahun masuk tidak berubah saat naik kelas.
+        self.assertEqual(self.siswa.tahun_masuk, self.tahun)
         # Roster kelas lama tetap dapat dilihat dari riwayat.
         self.assertIn(self.siswa, Student.objects.in_class(self.kelas))
         self.assertIn(self.siswa, Student.objects.in_class(kelas_baru))

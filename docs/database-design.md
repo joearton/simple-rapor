@@ -23,7 +23,8 @@ Unique `(academic_year, nama)`.
 Unique `(academic_year, grade, nama)`.
 
 ### Student
-`nis, nisn, nama, jenis_kelamin, tempat_lahir, tanggal_lahir, agama, pendidikan_sebelumnya, alamat, status`
+`nis, nisn, nama, jenis_kelamin, tempat_lahir, tanggal_lahir, agama, pendidikan_sebelumnya, alamat, tahun_masuk, status`
+`tahun_masuk` FK AcademicYear; menentukan tahun pertama masuk, sedangkan kelas saat ini dibaca dari `StudentEnrollment` tahun aktif.
 Unique `(nis)`, `(nisn)`.
 
 ### StudentGuardian

@@ -46,6 +46,7 @@
           <th>Nama Peserta Didik</th>
           <th>NIS / NISN</th>
           <th class="num">L/P</th>
+          <th class="num">Tahun Masuk</th>
           <th>Tempat &amp; Tanggal Lahir</th>
           <th>Orang Tua</th>
           {% if bisa_ubah %}<th style="width:110px">Aksi</th>{% endif %}
@@ -61,6 +62,7 @@
           </td>
           <td>{{ siswa.nis|default:"-" }} / {{ siswa.nisn|default:"-" }}</td>
           <td class="num">{{ siswa.jenis_kelamin }}</td>
+          <td class="num">{{ siswa.tahun_masuk.tahun|default:"-" }}</td>
           <td>
             {{ siswa.tempat_lahir|default:"-" }}{% if siswa.tanggal_lahir %}, {{ siswa.tanggal_lahir|tanggal_id }}{% endif %}
           </td>
@@ -81,7 +83,7 @@
           {% endif %}
         </tr>
         {% empty %}
-        <tr><td colspan="{% if bisa_ubah %}7{% else %}6{% endif %}" class="empty"><strong>Belum ada data siswa</strong>Tambahkan siswa atau impor dari Excel.</td></tr>
+        <tr><td colspan="{% if bisa_ubah %}8{% else %}7{% endif %}" class="empty"><strong>Belum ada data siswa</strong>Tambahkan siswa atau impor dari Excel.</td></tr>
         {% endfor %}
       </tbody>
     </table>

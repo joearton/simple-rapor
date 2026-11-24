@@ -203,8 +203,8 @@ class StudentForm(forms.ModelForm):
         fields = [
             'no_urut', 'nis', 'nisn', 'nama', 'jenis_kelamin', 'tempat_lahir',
             'tanggal_lahir', 'agama', 'pendidikan_sebelumnya', 'alamat',
-            'nama_ayah', 'nama_ibu', 'pekerjaan_ayah', 'pekerjaan_ibu',
-            'alamat_orang_tua', 'aktif',
+            'tahun_masuk', 'nama_ayah', 'nama_ibu', 'pekerjaan_ayah',
+            'pekerjaan_ibu', 'alamat_orang_tua', 'aktif',
         ]
         widgets = {
             'tanggal_lahir': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
@@ -213,6 +213,19 @@ class StudentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _pasang_class(self)
+        self.fields['tahun_masuk'].queryset = AcademicYear.objects.order_by('-tahun')
+        self.fields['tahun_masuk'].required = True
+        self.fields['tahun_masuk'].help_text = (
+            'Tahun pertama siswa masuk. Menentukan riwayat kenaikan kelas.'
+        )
+        if not self.instance.pk:
+            aktif = AcademicYear.objects.filter(aktif=True).first()
+            if aktif:
+                self.fields['tahun_masuk'].initial = aktif
+        elif self.instance.tahun_masuk_id is None:
+            awal = self.instance.enrollments.order_by('academic_year__tahun').first()
+            if awal:
+                self.fields['tahun_masuk'].initial = awal.academic_year
 
 
 class TeacherForm(forms.ModelForm):

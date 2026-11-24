@@ -701,6 +701,10 @@ class Student(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='student_profile', verbose_name='Akun Portal',
     )
+    tahun_masuk = models.ForeignKey(
+        AcademicYear, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='siswa_masuk', verbose_name='Tahun Masuk',
+    )
     class_group = models.ForeignKey(
         ClassGroup, on_delete=models.CASCADE, related_name='siswa_list'
     )
@@ -735,6 +739,11 @@ class Student(models.Model):
         return 'Laki-Laki' if self.jenis_kelamin == 'L' else 'Perempuan'
 
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get('update_fields')
+        if self.tahun_masuk_id is None and self.class_group_id:
+            self.tahun_masuk = self.class_group.academic_year
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {'tahun_masuk'}
         super().save(*args, **kwargs)
         # Catat/rapikan penempatan kelas pada tahun pelajaran kelas saat ini.
         # Riwayat tahun sebelumnya tidak disentuh.
@@ -753,6 +762,16 @@ class Student(models.Model):
             .filter(academic_year=academic_year)
             .first()
         )
+
+    @property
+    def kelas_terkini(self):
+        """Kelas pada tahun pelajaran aktif, berdasarkan riwayat enrollment."""
+        tahun = AcademicYear.objects.filter(aktif=True).first()
+        if tahun is not None:
+            enrollment = self.enrollment_for(tahun)
+            if enrollment is not None:
+                return enrollment.class_group
+        return self.class_group
 
 
 class StudentEnrollment(models.Model):

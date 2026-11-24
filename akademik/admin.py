@@ -105,8 +105,11 @@ class TeachingAssignmentAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('no_urut', 'nama', 'nis', 'nisn', 'jenis_kelamin', 'class_group', 'aktif')
-    list_filter = ('class_group', 'aktif', 'jenis_kelamin')
+    list_display = (
+        'no_urut', 'nama', 'nis', 'nisn', 'jenis_kelamin',
+        'class_group', 'tahun_masuk', 'aktif',
+    )
+    list_filter = ('class_group', 'tahun_masuk', 'aktif', 'jenis_kelamin')
     search_fields = ('nama', 'nis', 'nisn')
     ordering = ('no_urut',)
 

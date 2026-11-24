@@ -423,6 +423,19 @@ table.data .sub { display: block; font-weight: 400; color: var(--muted); font-si
   font-size: 13px;
 }
 .filter-bar input[type="search"] { min-width: 220px; }
+.filter-bar .form-input,
+.filter-bar input:not([type="hidden"]),
+.filter-bar select,
+.filter-bar .btn {
+  height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+.filter-bar .btn { justify-content: center; }
+.filter-bar .btn-sm { padding-left: 14px; padding-right: 14px; }
+.filter-bar select { padding-left: 10px; padding-right: 28px; }
 .filter-bar .spacer { flex: 1; }
 
 /* ---------- Tab formulir ---------- */
