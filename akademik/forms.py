@@ -140,39 +140,6 @@ class SchoolForm(forms.ModelForm):
         return logo
 
 
-class KelasForm(forms.ModelForm):
-    class Meta:
-        model = ClassGroup
-        fields = ['tingkat', 'nama', 'fase', 'wali_kelas_guru']
-        widgets = {
-            'wali_kelas_guru': forms.Select(attrs={'class': 'form-input'}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['tingkat'] = forms.ChoiceField(
-            label='Tingkat',
-            choices=_pilihan_tingkat(),
-            help_text='Pilih tingkat kelas (master Tingkat Kelas).',
-        )
-        self.fields['wali_kelas_guru'].queryset = Teacher.objects.filter(aktif=True)
-        _pasang_class(self)
-
-    def save(self, commit=True):
-        obj = super().save(commit=False)
-        obj.grade = _grade_dari_tingkat(
-            self.cleaned_data.get('tingkat'), self.cleaned_data.get('fase')
-        )
-        if obj.wali_kelas_guru_id:
-            guru = obj.wali_kelas_guru
-            obj.wali_kelas = guru.nama
-            obj.nktam_wali = guru.nktam
-        if commit:
-            obj.save()
-            self.save_m2m()
-        return obj
-
-
 class AcademicYearForm(forms.ModelForm):
     class Meta:
         model = AcademicYear

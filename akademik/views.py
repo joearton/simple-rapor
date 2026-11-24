@@ -43,7 +43,6 @@ from .forms import (
     ExtracurricularPredicateForm,
     ClassGroupForm,
     GradeConfigurationForm,
-    KelasForm,
     LoginForm,
     MateriPembelajaranForm,
     ProfileForm,
@@ -285,18 +284,11 @@ def dashboard(request):
 @super_admin_required
 def identitas(request):
     school = School.get_solo()
-    kelas = _kelas()
-    semester = _semester()
-    academic_year = semester.academic_year if semester else AcademicYear.get_aktif()
 
     if request.method == 'POST':
         form = SchoolForm(request.POST, request.FILES, instance=school)
-        kelas_form = KelasForm(request.POST, instance=kelas, prefix='kelas') if kelas else None
-        if form.is_valid() and (kelas_form is None or kelas_form.is_valid()):
-            with transaction.atomic():
-                form.save()
-                if kelas_form is not None:
-                    kelas_form.save()
+        if form.is_valid():
+            form.save()
             catat_audit(
                 request.user, 'UPDATE', school,
                 deskripsi='Perbarui identitas/pengaturan sekolah', request=request,
@@ -306,13 +298,9 @@ def identitas(request):
         messages.error(request, 'Periksa kembali isian identitas.')
     else:
         form = SchoolForm(instance=school)
-        kelas_form = KelasForm(instance=kelas, prefix='kelas') if kelas else None
 
     return render(request, 'akademik/identitas.html', {
         'form': form,
-        'kelas_form': kelas_form,
-        'academic_year': academic_year,
-        'semester': semester,
     })
 
 

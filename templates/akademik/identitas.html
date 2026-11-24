@@ -8,6 +8,9 @@
     <h2>Identitas Sekolah</h2>
     <p>Data ini dipakai pada kepala rapor, sampul, dan halaman cetak.</p>
   </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:tahun_list' %}"><svg class="icon"><use href="#i-calendar"/></svg> Kelola Kelas &amp; Semester</a>
+  </div>
 </div>
 
 <form method="post" id="form-identitas" enctype="multipart/form-data" novalidate>
@@ -17,7 +20,6 @@
       <button type="button" class="tab-button active" data-tab-target="profil">Profil Sekolah</button>
       <button type="button" class="tab-button" data-tab-target="logo">Logo &amp; Kop</button>
       <button type="button" class="tab-button" data-tab-target="layout">Tata Letak Rapor</button>
-      <button type="button" class="tab-button" data-tab-target="kelas">Kelas Aktif</button>
     </div>
     <div class="tab-panel active" data-tab-panel="profil">
   <div class="panel">
@@ -188,44 +190,6 @@
           {{ form.label_ttd_wali }}{{ form.label_ttd_wali.errors }}
           <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:12.5px;margin-top:6px">{{ form.tampilkan_ttd_wali }} Tampilkan</label>
         </div>
-      </div>
-    </div>
-  </div>
-    </div>
-
-    <div class="tab-panel" data-tab-panel="kelas">
-  <div class="section-title">Kelas Aktif</div>
-  <div class="panel">
-    <div class="panel-head">
-      <h3>Pengaturan Kelas Aktif</h3>
-      <span class="hint">{{ academic_year.tahun|default:"-" }} &middot; Semester {{ semester.nama|default:"-" }}</span>
-    </div>
-    <div class="panel-body">
-      {% if kelas_form %}
-      <div class="form-grid">
-        <div class="field">
-          <label for="{{ kelas_form.tingkat.id_for_label }}">Tingkat</label>
-          {{ kelas_form.tingkat }}{{ kelas_form.tingkat.errors }}
-        </div>
-        <div class="field">
-          <label for="{{ kelas_form.nama.id_for_label }}">Nama Kelas</label>
-          {{ kelas_form.nama }}{{ kelas_form.nama.errors }}
-        </div>
-        <div class="field">
-          <label for="{{ kelas_form.fase.id_for_label }}">Fase</label>
-          {{ kelas_form.fase }}{{ kelas_form.fase.errors }}
-        </div>
-        <div class="field">
-          <label for="{{ kelas_form.wali_kelas_guru.id_for_label }}">Wali Kelas</label>
-          {{ kelas_form.wali_kelas_guru }}
-          <div class="help">Pilih dari Data Guru. <a href="{% url 'akademik:guru_list' %}">Kelola Data Guru</a></div>
-        </div>
-      </div>
-      {% else %}
-      <div class="alert info">Belum ada kelas aktif. Buat tahun pelajaran, semester, dan kelas pada halaman Pengaturan Akademik.</div>
-      {% endif %}
-      <div class="note-box" style="margin-top:16px">
-        Tahun pelajaran, semester, dan daftar kelas dikelola di <a href="{% url 'akademik:tahun_list' %}">Pengaturan Akademik</a>.
       </div>
     </div>
   </div>

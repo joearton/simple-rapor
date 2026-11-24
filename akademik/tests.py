@@ -280,7 +280,7 @@ class HalamanTest(RaporTestBase):
         self.assertIn(self.siswa.nama, html)
         self.assertIn('Ananda sangat menguasai', html)
 
-    def test_identitas_tidak_tertukar_dengan_nama_kelas(self):
+    def test_identitas_tidak_mengubah_kelas(self):
         response = self.client.post(reverse('akademik:identitas'), {
             'nama': 'SMP HASIL UBAH', 'alamat': 'Jl. Baru', 'tempat_rapor': 'Kotabumi',
             'judul_rapor': 'RAPOR UJI SEKOLAH',
@@ -292,7 +292,6 @@ class HalamanTest(RaporTestBase):
             'tampilkan_ekskul': 'on', 'tampilkan_absensi': 'on', 'tampilkan_catatan': 'on',
             'tampilkan_ttd_orang_tua': 'on', 'tampilkan_ttd_kepala': 'on',
             'tampilkan_ttd_wali': 'on',
-            'kelas-tingkat': 'VII', 'kelas-nama': 'Kelas Baru', 'kelas-fase': 'D',
         })
         self.assertEqual(response.status_code, 302)
         self.sekolah.refresh_from_db()
@@ -301,7 +300,7 @@ class HalamanTest(RaporTestBase):
         self.assertEqual(self.sekolah.judul_rapor, 'RAPOR UJI SEKOLAH')
         self.assertEqual(self.sekolah.ukuran_kertas, 'F4')
         self.assertEqual(self.sekolah.font_rapor, 'arial')
-        self.assertEqual(self.kelas.nama, 'Kelas Baru')
+        self.assertEqual(self.kelas.nama, 'Uji')
 
 
 class AksesGuruTest(RaporTestBase):
