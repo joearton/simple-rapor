@@ -3172,3 +3172,27 @@ def pilih_tahun_pelajaran(request):
     if not next_url.startswith('/') or next_url.startswith('//'):
         next_url = reverse('akademik:dashboard')
     return redirect(next_url)
+
+
+@login_required
+def pilih_kelas(request):
+    if not (is_admin(request.user) or is_kepala_sekolah(request.user)):
+        messages.error(request, 'Anda tidak memiliki akses mengganti kelas aktif.')
+        return redirect('akademik:dashboard')
+    if request.method != 'POST':
+        return redirect('akademik:dashboard')
+    kelas = get_object_or_404(ClassGroup, pk=request.POST.get('kelas'))
+    tahun_aktif = AcademicYear.objects.filter(aktif=True).first()
+    if tahun_aktif is not None and kelas.academic_year_id != tahun_aktif.id:
+        messages.error(request, 'Kelas bukan bagian dari tahun pelajaran aktif.')
+        return redirect('akademik:dashboard')
+    _aktifkan_kelas_internal(kelas)
+    catat_audit(
+        request.user, 'ACTIVATE', kelas,
+        deskripsi=f'Mengaktifkan kelas {kelas.nama_lengkap}', request=request,
+    )
+    messages.success(request, f'Kelas aktif diubah ke {kelas.nama_lengkap}.')
+    next_url = request.POST.get('next') or ''
+    if not next_url.startswith('/') or next_url.startswith('//'):
+        next_url = reverse('akademik:dashboard')
+    return redirect(next_url)

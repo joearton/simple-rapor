@@ -116,6 +116,18 @@
           </select>
           <button type="submit" class="btn btn-sm">Terapkan</button>
         </form>
+        {% if kelas_aktif %}
+        <form class="period-form" id="class-form" method="post" action="{% url 'akademik:pilih_kelas' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <select name="kelas" id="class-select" class="form-input" aria-label="Pilih kelas" onchange="this.form.submit()">
+            {% for k in kelas_aktif.academic_year.kelas_list.all %}
+            <option value="{{ k.id }}" {% if k.id == kelas_aktif.id %}selected{% endif %}>{{ k.nama_lengkap }}</option>
+            {% endfor %}
+          </select>
+          <noscript><button type="submit" class="btn btn-sm">Kelas</button></noscript>
+        </form>
+        {% endif %}
         {% endif %}
         <details class="user-menu" id="user-menu">
           <summary>

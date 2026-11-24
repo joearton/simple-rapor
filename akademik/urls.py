@@ -17,6 +17,7 @@ urlpatterns = [
     path('pengguna/<int:pk>/hapus/', views.pengguna_hapus, name='pengguna_hapus'),
     path('audit-log/', views.audit_log, name='audit_log'),
     path('pilih-tahun-pelajaran/', views.pilih_tahun_pelajaran, name='pilih_tahun_pelajaran'),
+    path('pilih-kelas/', views.pilih_kelas, name='pilih_kelas'),
 
     path('', views.dashboard, name='dashboard'),
     path('identitas/', views.identitas, name='identitas'),

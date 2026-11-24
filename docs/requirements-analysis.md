@@ -75,7 +75,7 @@ Sudah tersedia:
 - Tahun pelajaran/semester/kelas, mapel per tahun, guru, siswa, penugasan.
 - Tugas pembelajaran (model `LearningObjective` diperluas), evaluasi formatif/sumatif (rencana), grid nilai formatif/sumatif, leger, rapor dan sampul, catatan/ekskul terikat tahun.
 - Import/export Excel, pengaturan identitas/logo/tata letak rapor, filter/paginasi.
-- 108 test lulus.
+- 109 test lulus.
 
 Pembaruan Tahap 1–7 (24 Nov 2026):
 - Peran Super Admin/Kepala Sekolah/Operator/Guru/Wali + audit log + dashboard per peran.

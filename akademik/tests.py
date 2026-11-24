@@ -434,6 +434,19 @@ class PengaturanAkademikTest(RaporTestBase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(AcademicYear.objects.filter(pk=self.tahun.id).exists())
 
+    def test_ganti_kelas_aktif_dari_topbar(self):
+        kelas_lain = ClassGroup.objects.create(
+            academic_year=self.tahun, tingkat='VII', nama='Kelas Lain', fase='D'
+        )
+        response = self.client.post(reverse('akademik:pilih_kelas'), {
+            'kelas': kelas_lain.id, 'next': reverse('akademik:siswa_list'),
+        })
+        self.assertEqual(response.status_code, 302)
+        kelas_lain.refresh_from_db()
+        self.kelas.refresh_from_db()
+        self.assertTrue(kelas_lain.aktif)
+        self.assertFalse(self.kelas.aktif)
+
     def test_tambah_semester_dan_kelas(self):
         response = self.client.post(reverse('akademik:semester_tambah'), {
             'academic_year': self.tahun.id, 'nama': 'II',
@@ -1075,6 +1088,8 @@ class ElemenUiTest(RaporTestBase):
         html = self.client.get(reverse('akademik:dashboard')).content.decode()
         self.assertIn('id="period-form"', html)
         self.assertIn('id="period-year-select"', html)
+        self.assertIn('id="class-form"', html)
+        self.assertIn('id="class-select"', html)
         self.assertIn('id="user-menu"', html)
         self.assertIn('id="dashboard-hero"', html)
 
