@@ -1,0 +1,42 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if subject %}Ubah Mapel{% else %}Tambah Mapel{% endif %}{% endblock %}
+{% block topbar %}{% if subject %}Ubah Mata Pelajaran{% else %}Tambah Mata Pelajaran{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:mapel_list' %}">Mata Pelajaran</a>
+  <span>/</span>
+  <span>{% if subject %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if subject %}{{ subject.nama }}{% else %}Mata Pelajaran Baru{% endif %}</h2>
+    <p>Urutan menentukan posisi mapel pada leger dan rapor.</p>
+  </div>
+</div>
+
+<div style="max-width:640px">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Data Mata Pelajaran</h3></div>
+      <div class="panel-body">
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="field" style="margin-bottom:14px">
+          <label for="{{ form.nama.id_for_label }}">Nama Mata Pelajaran</label>
+          {{ form.nama }}{{ form.nama.errors }}
+        </div>
+        <div class="field" style="margin-bottom:18px">
+          <label for="{{ form.urutan.id_for_label }}">Urutan</label>
+          {{ form.urutan }}{{ form.urutan.errors }}
+          <div class="help">Contoh: 1 untuk mapel pertama pada rapor.</div>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan</button>
+          <a class="btn" href="{% url 'akademik:mapel_list' %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

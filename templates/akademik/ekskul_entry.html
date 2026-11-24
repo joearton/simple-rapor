@@ -1,0 +1,98 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Ekstrakurikuler{% endblock %}
+{% block topbar %}Ekstrakurikuler{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Ekstrakurikuler</h2>
+    <p>Isi hingga lima kegiatan per siswa, lengkap dengan predikat dan deskripsi singkat.{% if guru %} Pembina/Wali Kelas: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:ekspor' 'ekskul' %}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+    <a class="btn" href="{% url 'akademik:impor' 'ekskul' %}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get" style="border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px">
+  <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+  <select class="form-input" name="status">
+    <option value="">Semua siswa</option>
+    <option value="sudah" {% if status_filter == 'sudah' %}selected{% endif %}>Sudah diisi</option>
+    <option value="belum" {% if status_filter == 'belum' %}selected{% endif %}>Belum diisi</option>
+  </select>
+  <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+  <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+</form>
+
+<form method="post" action="{% querystring %}">
+  {% csrf_token %}
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Kegiatan Ekstrakurikuler</h3>
+      <span class="hint">{{ page_obj.paginator.count }} siswa</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th class="num" style="width:44px" rowspan="2">No</th>
+            <th style="min-width:180px" rowspan="2">Nama Siswa</th>
+            {% for i in slots %}
+            <th colspan="3" class="num" style="border-left:1px solid var(--line)">Ekstrakurikuler {{ i }}</th>
+            {% endfor %}
+          </tr>
+          <tr>
+            {% for i in slots %}
+            <th style="min-width:130px;border-left:1px solid var(--line)">Nama</th>
+            <th class="num" style="width:64px">Predikat</th>
+            <th style="min-width:130px">Deskripsi</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="num">{{ forloop.counter }}</td>
+            <td class="nama">{{ row.siswa.nama }}</td>
+            {% for eks in row.ekskul %}
+            <td style="border-left:1px solid var(--line);padding:6px">
+              <input class="cell-text" type="text" name="eks_{{ row.siswa.id }}_{{ forloop.counter }}" value="{{ eks.nama|default:'' }}" placeholder="Nama kegiatan" list="eks-list">
+            </td>
+            <td class="num" style="padding:6px">
+              <input class="cell-input" type="text" name="pred_{{ row.siswa.id }}_{{ forloop.counter }}" value="{{ eks.predikat|default:'' }}" placeholder="A" maxlength="3" list="pred-list">
+            </td>
+            <td style="padding:6px">
+              <input class="cell-text" type="text" name="desk_{{ row.siswa.id }}_{{ forloop.counter }}" value="{{ eks.deskripsi|default:'' }}" placeholder="Deskripsi">
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'akademik/_pagination.html' %}
+    <div class="panel-body" style="border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="hint">Kosongkan seluruh isian pada satu kolom untuk menghapus kegiatan tersebut.</span>
+      <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Ekstrakurikuler</button>
+    </div>
+  </div>
+</form>
+
+<datalist id="eks-list">
+  <option value="Hizbul Wathan">
+  <option value="Tapak Suci">
+  <option value="Tahfidz">
+  <option value="Basket">
+  <option value="Pramuka">
+  <option value="Futsal">
+  <option value="Seni Tari">
+  <option value="Robotik">
+</datalist>
+<datalist id="pred-list">
+  <option value="A">
+  <option value="B">
+  <option value="C">
+  <option value="D">
+</datalist>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if siswa %}Ubah Siswa{% else %}Tambah Siswa{% endif %}{% endblock %}
+{% block topbar %}{% if siswa %}Ubah Data Siswa{% else %}Tambah Data Siswa{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:siswa_list' %}">Data Siswa</a>
+  <span>/</span>
+  <span>{% if siswa %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if siswa %}{{ siswa.nama }}{% else %}Peserta Didik Baru{% endif %}</h2>
+    <p>Kelas {{ kelas_aktif.nama_lengkap|default:"-" }} &middot; {{ semester_aktif.academic_year.tahun|default:"-" }}</p>
+  </div>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="panel">
+    <div class="panel-head"><h3>Identitas Peserta Didik</h3></div>
+    <div class="panel-body">
+      <div data-tab-group>
+        <div class="form-tabs" role="tablist">
+          <button type="button" class="tab-button active" data-tab-target="identitas">Identitas Siswa</button>
+          <button type="button" class="tab-button" data-tab-target="ortu">Orang Tua &amp; Alamat</button>
+        </div>
+        <div class="tab-panel active" data-tab-panel="identitas">
+      {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="form-grid">
+        <div class="field">
+          <label for="{{ form.no_urut.id_for_label }}">No Urut / Absen</label>
+          {{ form.no_urut }}{{ form.no_urut.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.nama.id_for_label }}">Nama Peserta Didik</label>
+          {{ form.nama }}{{ form.nama.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.nis.id_for_label }}">NIS</label>
+          {{ form.nis }}{{ form.nis.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.nisn.id_for_label }}">NISN</label>
+          {{ form.nisn }}{{ form.nisn.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.jenis_kelamin.id_for_label }}">Jenis Kelamin</label>
+          {{ form.jenis_kelamin }}{{ form.jenis_kelamin.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.agama.id_for_label }}">Agama</label>
+          {{ form.agama }}{{ form.agama.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.tempat_lahir.id_for_label }}">Tempat Lahir</label>
+          {{ form.tempat_lahir }}{{ form.tempat_lahir.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.tanggal_lahir.id_for_label }}">Tanggal Lahir</label>
+          {{ form.tanggal_lahir }}{{ form.tanggal_lahir.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.pendidikan_sebelumnya.id_for_label }}">Pendidikan Sebelumnya</label>
+          {{ form.pendidikan_sebelumnya }}{{ form.pendidikan_sebelumnya.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.aktif.id_for_label }}">Status</label>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">
+            {{ form.aktif }} Aktif sebagai peserta didik
+          </label>
+        </div>
+        <div class="field full">
+          <label for="{{ form.alamat.id_for_label }}">Alamat Peserta Didik</label>
+          {{ form.alamat }}
+        </div>
+      </div>
+        </div>
+
+        <div class="tab-panel" data-tab-panel="ortu">
+      <div class="section-title">Data Orang Tua</div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="{{ form.nama_ayah.id_for_label }}">Nama Ayah</label>
+          {{ form.nama_ayah }}
+        </div>
+        <div class="field">
+          <label for="{{ form.nama_ibu.id_for_label }}">Nama Ibu</label>
+          {{ form.nama_ibu }}
+        </div>
+        <div class="field">
+          <label for="{{ form.pekerjaan_ayah.id_for_label }}">Pekerjaan Ayah</label>
+          {{ form.pekerjaan_ayah }}
+        </div>
+        <div class="field">
+          <label for="{{ form.pekerjaan_ibu.id_for_label }}">Pekerjaan Ibu</label>
+          {{ form.pekerjaan_ibu }}
+        </div>
+        <div class="field full">
+          <label for="{{ form.alamat_orang_tua.id_for_label }}">Alamat Orang Tua</label>
+          {{ form.alamat_orang_tua }}
+        </div>
+      </div>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:20px">
+        <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan</button>
+        <a class="btn" href="{% url 'akademik:siswa_list' %}">Batal</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,138 @@
+/* ============ Rapor (layar & cetak) ============ */
+.rapor-page { padding: 20px; }
+
+.rapor-sheet.font-arial { font-family: Arial, Helvetica, sans-serif; }
+.rapor-sheet.font-times { font-family: "Times New Roman", Times, serif; }
+
+.rapor-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto 24px;
+  padding: 14mm 16mm;
+  background: #fff;
+  color: #111;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 11.5pt;
+  line-height: 1.35;
+  box-shadow: 0 6px 30px rgba(15, 30, 22, 0.18);
+  border: 1px solid #e3e3e3;
+  position: relative;
+}
+
+.rapor-toolbar {
+  max-width: 210mm;
+  margin: 0 auto 14px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.rapor-head { display: flex; align-items: center; gap: 6mm; border-bottom: 3px double #111; padding-bottom: 8px; margin-bottom: 12px; }
+.rapor-head .rapor-kop { flex: 1; text-align: center; }
+.rapor-logo { flex: 0 0 auto; width: auto; object-fit: contain; }
+.rapor-head .kementerian { font-size: 0.95em; letter-spacing: 0.5px; }
+.rapor-head .sekolah { font-size: 1.25em; font-weight: 700; letter-spacing: 0.3px; margin: 2px 0; }
+.rapor-head .alamat { font-size: 0.82em; }
+.rapor-title { text-align: center; margin: 14px 0 16px; }
+.rapor-title h2 { font-size: 1.12em; margin: 0; letter-spacing: 0.6px; text-transform: uppercase; }
+.rapor-title .sub { font-size: 0.95em; margin-top: 2px; }
+
+.identitas-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 1em; }
+.identitas-table td { padding: 2px 4px; vertical-align: top; }
+.identitas-table .label { width: 26%; }
+.identitas-table .colon { width: 2%; }
+.identitas-table .value { width: 30%; font-weight: 600; }
+
+table.rapor-table { width: 100%; border-collapse: collapse; font-size: 0.93em; }
+table.rapor-table th, table.rapor-table td { border: 1px solid #222; padding: 4px 6px; vertical-align: top; }
+table.rapor-table th { background: #eef1f0; text-align: center; font-weight: 700; }
+table.rapor-table td.c { text-align: center; }
+table.rapor-table td.nilai { text-align: center; font-weight: 700; width: 12%; }
+table.rapor-table td.no { text-align: center; width: 6%; }
+table.rapor-table td.mapel { width: 28%; }
+table.rapor-table tr { page-break-inside: avoid; }
+
+.rapor-subtitle { margin: 16px 0 6px; font-size: 1em; font-weight: 700; }
+
+.rapor-footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.rapor-footer-grid.single { grid-template-columns: 1fr; }
+.rapor-box { border: 1px solid #222; padding: 8px 10px; font-size: 0.92em; }
+.rapor-box h4 { margin: 0 0 6px; font-size: 0.92em; text-align: center; text-decoration: underline; }
+.absensi-row { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; }
+.absensi-row span:first-child { width: 52%; }
+
+.signature-row { display: flex; gap: 16px; margin-top: 22px; font-size: 1em; }
+.signature-col { flex: 1; }
+.signature-col.tengah { text-align: center; }
+.signature-col .space { height: 62px; }
+.signature-col .name { font-weight: 700; text-decoration: underline; }
+.signature-col .role { font-size: 0.92em; }
+.tanggal { text-align: right; margin: 4px 4px 0 0; font-size: 0.95em; }
+
+.catatan-text { min-height: 58px; font-size: 0.92em; }
+
+/* ---------- Sampul ---------- */
+.sampul-sheet {
+  border: 4px double #111;
+  padding: 8mm 10mm;
+  display: flex;
+  flex-direction: column;
+  min-height: 277mm;
+}
+.sampul-top { text-align: center; padding-top: 2mm; }
+.sampul-majelis { font-size: 11pt; font-weight: 700; line-height: 1.35; letter-spacing: 0.2px; }
+.sampul-school { font-size: 14pt; font-weight: 700; margin-top: 3px; letter-spacing: 0.3px; }
+
+.sampul-logo {
+  width: 72px; height: 72px; margin: 7mm auto 4mm;
+  border-radius: 50%;
+  border: 2px solid #111;
+  display: grid; place-items: center;
+  font-family: "Times New Roman", serif;
+  text-align: center; line-height: 1.05;
+}
+.sampul-logo .l1 { font-size: 7pt; letter-spacing: 0.6px; }
+.sampul-logo .l2 { font-size: 15pt; font-weight: 700; }
+.sampul-logo-img-wrap { text-align: center; margin: 6mm auto 4mm; }
+
+.sampul-title { text-align: center; margin: 5mm 0 7mm; }
+.sampul-title h1 { font-size: 17pt; margin: 0; letter-spacing: 1px; }
+.sampul-title h2 { font-size: 14pt; margin: 2px 0 0; font-weight: 700; letter-spacing: 0.6px; }
+.sampul-title .thn { font-size: 11pt; margin-top: 4px; }
+
+.sampul-name { text-align: center; margin: 0 0 8mm; }
+.sampul-name .label { font-size: 10.5pt; }
+.sampul-name .nama { font-size: 15pt; font-weight: 700; letter-spacing: 0.5px; margin-top: 1px; }
+.sampul-name .nis { font-size: 10.5pt; margin-top: 1px; }
+
+.sampul-identitas { margin-top: auto; border: 1px solid #111; padding: 4mm 6mm; }
+.sampul-identitas h3 { margin: 0 0 2mm; text-align: center; font-size: 10.5pt; letter-spacing: 0.5px; text-transform: uppercase; }
+.sampul-identitas table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+.sampul-identitas td { padding: 0.8mm 1.5mm; vertical-align: top; }
+.sampul-identitas td.label { width: 14%; }
+.sampul-identitas td.colon { width: 2%; }
+.sampul-identitas table.compact td.label { white-space: nowrap; }
+
+
+/* ---------- Cetak ---------- */
+@page { size: A4 portrait; margin: 12mm 14mm; }
+
+@media print {
+  .rapor-page { padding: 0; }
+  .rapor-sheet {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    font-size: 11pt;
+  }
+  .sampul-sheet { min-height: 0; height: 265mm; }
+  .rapor-sheet.page-break { page-break-after: always; }
+  .rapor-sheet:last-child { page-break-after: auto; }
+  .rapor-toolbar { display: none; }
+  tr { page-break-inside: avoid; }
+}

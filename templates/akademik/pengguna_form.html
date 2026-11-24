@@ -1,0 +1,88 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if target %}Ubah Pengguna{% else %}Tambah Pengguna{% endif %}{% endblock %}
+{% block topbar %}{% if target %}Ubah Pengguna{% else %}Tambah Pengguna{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:pengguna_list' %}">Manajemen Pengguna</a>
+  <span>/</span>
+  <span>{% if target %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if target %}{{ target.username }}{% else %}Pengguna Baru{% endif %}</h2>
+    <p>Atur akun login dan perannya di aplikasi.</p>
+  </div>
+</div>
+
+<div style="max-width:760px">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Data Akun</h3></div>
+      <div class="panel-body">
+        <div data-tab-group>
+          <div class="form-tabs" role="tablist">
+            <button type="button" class="tab-button active" data-tab-target="akun">Data Akun</button>
+            <button type="button" class="tab-button" data-tab-target="akses">Peran &amp; Akses</button>
+          </div>
+          <div class="tab-panel active" data-tab-panel="akun">
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.username.id_for_label }}">Username</label>
+            {{ form.username }}{{ form.username.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.email.id_for_label }}">E-mail</label>
+            {{ form.email }}{{ form.email.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.first_name.id_for_label }}">Nama Depan</label>
+            {{ form.first_name }}{{ form.first_name.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.last_name.id_for_label }}">Nama Belakang</label>
+            {{ form.last_name }}{{ form.last_name.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.password.id_for_label }}">Password</label>
+            {{ form.password }}{{ form.password.errors }}
+            <div class="help">{{ form.password.help_text }}</div>
+          </div>
+          <div class="field">
+            <label for="{{ form.is_active.id_for_label }}">Status</label>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">{{ form.is_active }} Akun aktif</label>
+          </div>
+          </div>
+          </div>
+
+          <div class="tab-panel" data-tab-panel="akses">
+          <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.role.id_for_label }}">Peran</label>
+            {{ form.role }}{{ form.role.errors }}
+            <div class="help">Administrator dapat mengakses seluruh data dan pengaturan.</div>
+          </div>
+          <div class="field">
+            <label for="{{ form.guru.id_for_label }}">Data Guru</label>
+            {{ form.guru }}{{ form.guru.errors }}
+            <div class="help">Wajib untuk peran Guru. Pilih guru yang belum memiliki akun.</div>
+          </div>
+        </div>
+          </div>
+        </div>
+
+        {% if target == request.user %}
+        <div class="note-box" style="margin-top:16px">Anda sedang mengubah akun sendiri. Peran administrator dan status aktif tidak dapat diturunkan.</div>
+        {% endif %}
+
+        <div class="actions" style="margin-top:20px">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Pengguna</button>
+          <a class="btn" href="{% url 'akademik:pengguna_list' %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

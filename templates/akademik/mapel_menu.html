@@ -1,0 +1,42 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{{ konfigurasi.judul }}{% endblock %}
+{% block topbar %}{{ konfigurasi.judul }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>{{ konfigurasi.judul }}</h2>
+    <p>{{ konfigurasi.deskripsi }}</p>
+  </div>
+  <div class="actions">
+    <span class="chip">{{ subjects|length }} mata pelajaran</span>
+    {% if is_admin_sekolah %}<a class="btn" href="{% url 'akademik:mengajar' %}"><svg class="icon"><use href="#i-badge"/></svg> Pembagian Mengajar</a>{% endif %}
+  </div>
+</div>
+
+<div class="subject-grid">
+  {% for subject in subjects %}
+  <a class="subject-card" href="{% url konfigurasi.url_name subject.id %}">
+    <span class="no">{{ forloop.counter }}</span>
+    <span>
+      <strong>{{ subject.nama }}</strong>
+      <small>{% if mode == 'tp' %}{{ subject.jumlah_tp }} tujuan pembelajaran{% else %}{{ subject.jumlah_tp }} TP tersedia{% endif %}</small>
+    </span>
+    <span class="go"><svg class="icon" style="width:16px;height:16px"><use href="#i-arrow"/></svg></span>
+  </a>
+  {% empty %}
+  <div class="card" style="grid-column:1/-1">
+    <div class="empty">
+      <strong>Belum ada mata pelajaran</strong>
+      {% if is_admin_sekolah %}Tambahkan mata pelajaran melalui menu Mata Pelajaran.{% else %}Admin belum menetapkan mapel yang Anda ampu pada Pembagian Mengajar.{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if mode == 'tp' %}
+<div class="note-box" style="margin-top:18px">
+  Tulis tujuan pembelajaran dengan huruf kecil di awal dan tanpa tanda titik di akhir kalimat, agar deskripsi rapor rapi.
+</div>
+{% endif %}
+{% endblock %}

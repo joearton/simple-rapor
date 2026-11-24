@@ -1,0 +1,147 @@
+{% extends 'akademik/base.html' %}
+{% load akademik_extras %}
+{% block title %}Asesmen Sumatif{% endblock %}
+{% block topbar %}Asesmen Sumatif{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:sumatif_menu' %}">Asesmen Sumatif</a>
+  <span>/</span>
+  <span>{{ subject.nama }}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{{ subject.nama }}</h2>
+    <p>Nilai rapor = rata-rata dari Rata-rata LM, STS, dan Rata-rata SAS.{% if guru %} Guru penilai: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:ekspor' 'sumatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+    <a class="btn" href="{% url 'akademik:impor' 'sumatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+    <a class="btn" href="{% url 'akademik:sumatif_menu' %}"><svg class="icon"><use href="#i-back"/></svg> Pilih Mapel</a>
+    {% if is_admin_sekolah or is_wali_kelas %}<a class="btn" href="{% url 'akademik:leger' %}"><svg class="icon"><use href="#i-chart"/></svg> Leger</a>{% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <div class="toolbar">
+    <div class="left legend">
+      <span><b>LM</b> Lingkup Materi</span>
+      <span><b>STS</b> Sumatif Tengah Semester</span>
+      <span><b>SAS</b> Sumatif Akhir Semester</span>
+    </div>
+    <span class="hint">{{ page_obj.paginator.count }} siswa</span>
+  </div>
+
+  <form class="filter-bar" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    <select class="form-input" name="status">
+      <option value="">Semua siswa</option>
+      <option value="sudah" {% if status_filter == 'sudah' %}selected{% endif %}>Sudah ada nilai akhir</option>
+      <option value="belum" {% if status_filter == 'belum' %}selected{% endif %}>Belum ada nilai akhir</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+
+  <form method="post" action="{% querystring %}" id="sumatif-form">
+    {% csrf_token %}
+    <div class="table-wrap">
+      <table class="data" id="sumatif-table">
+        <thead>
+          <tr>
+            <th class="num" style="width:44px" rowspan="2">No</th>
+            <th style="min-width:190px" rowspan="2">Nama Siswa</th>
+            <th class="num" colspan="10" style="text-align:center;border-right:1px solid var(--line)">Sumatif Lingkup Materi</th>
+            <th class="num" rowspan="2" style="min-width:66px">Rata LM</th>
+            <th class="num" rowspan="2" style="min-width:58px">STS</th>
+            <th class="num" colspan="2" style="text-align:center;border-right:1px solid var(--line)">Sumatif Akhir Semester</th>
+            <th class="num" rowspan="2" style="min-width:66px">Rata SAS</th>
+            <th class="num" rowspan="2" style="min-width:78px">Nilai Rapor</th>
+          </tr>
+          <tr>
+            {% for i in lm_range %}<th class="num">LM {{ i }}</th>{% endfor %}
+            <th class="num">Non Tes</th>
+            <th class="num" style="border-right:1px solid var(--line)">Tes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr data-row data-sid="{{ row.siswa.id }}">
+            <td class="num">{{ forloop.counter }}</td>
+            <td class="nama">{{ row.siswa.nama }}</td>
+            {% for nilai in row.lm %}
+            <td class="num">
+              <input class="cell-input lm-input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                     name="lm_{{ row.siswa.id }}_{{ forloop.counter }}" value="{{ nilai|floatformat:'-2' }}">
+            </td>
+            {% endfor %}
+            <td class="num cell-score" data-rata-lm>{{ row.rata_lm|rupiah_nilai }}</td>
+            <td class="num">
+              <input class="cell-input sts-input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                     name="sts_{{ row.siswa.id }}" value="{{ row.sts|floatformat:'-2' }}">
+            </td>
+            <td class="num">
+              <input class="cell-input sasn-input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                     name="sasn_{{ row.siswa.id }}" value="{{ row.sas_non_tes|floatformat:'-2' }}">
+            </td>
+            <td class="num">
+              <input class="cell-input sast-input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                     name="sast_{{ row.siswa.id }}" value="{{ row.sas_tes|floatformat:'-2' }}">
+            </td>
+            <td class="num cell-score" data-rata-sas>{{ row.rata_sas|rupiah_nilai }}</td>
+            <td class="num cell-score" data-nilai-rapor>{{ row.nilai_rapor|rupiah_nilai }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="18" class="empty"><strong>Belum ada siswa</strong>Tambahkan data siswa terlebih dahulu.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'akademik/_pagination.html' %}
+    <div class="panel-body" style="border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="hint">Kosongkan sel bila nilai belum tersedia.</span>
+      <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Nilai Sumatif</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const table = document.getElementById('sumatif-table');
+  if (!table) return;
+
+  function num(el) {
+    if (!el || el.value === '') return null;
+    const v = parseFloat(String(el.value).replace(',', '.'));
+    return isNaN(v) ? null : v;
+  }
+  function avg(list) {
+    const v = list.filter(x => x !== null);
+    if (!v.length) return null;
+    return v.reduce((a, b) => a + b, 0) / v.length;
+  }
+  function fmt(v) {
+    if (v === null) return '-';
+    return (Math.round(v * 100) / 100).toString().replace('.', ',');
+  }
+  function hitung(row) {
+    const lm = Array.from(row.querySelectorAll('.lm-input')).map(num);
+    const sts = num(row.querySelector('.sts-input'));
+    const sasn = num(row.querySelector('.sasn-input'));
+    const sast = num(row.querySelector('.sast-input'));
+    const rataLm = avg(lm);
+    const rataSas = avg([sasn, sast]);
+    const nilai = avg([rataLm, sts, rataSas]);
+    row.querySelector('[data-rata-lm]').textContent = fmt(rataLm);
+    row.querySelector('[data-rata-sas]').textContent = fmt(rataSas);
+    row.querySelector('[data-nilai-rapor]').textContent = fmt(nilai);
+  }
+
+  table.addEventListener('input', function (e) {
+    if (e.target.matches('input')) hitung(e.target.closest('tr'));
+  });
+})();
+</script>
+{% endblock %}

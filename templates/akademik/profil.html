@@ -1,0 +1,72 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Edit Profil{% endblock %}
+{% block topbar %}Edit Profil{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Edit Profil</h2>
+    <p>Perbarui data akun yang Anda gunakan untuk masuk aplikasi.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:ubah_password' %}"><svg class="icon"><use href="#i-key"/></svg> Ubah Password</a>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="panel">
+    <div class="panel-head"><h3>Data Akun</h3></div>
+    <div class="panel-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="field" style="margin-bottom:14px">
+          <label for="{{ form.username.id_for_label }}">Username</label>
+          {{ form.username }}{{ form.username.errors }}
+        </div>
+        <div class="form-grid" style="margin-bottom:14px">
+          <div class="field">
+            <label for="{{ form.first_name.id_for_label }}">Nama Depan</label>
+            {{ form.first_name }}{{ form.first_name.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.last_name.id_for_label }}">Nama Belakang</label>
+            {{ form.last_name }}{{ form.last_name.errors }}
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:18px">
+          <label for="{{ form.email.id_for_label }}">E-mail</label>
+          {{ form.email }}{{ form.email.errors }}
+        </div>
+        <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Profil</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h3>Informasi Akun</h3></div>
+    <div class="panel-body">
+      <div class="row-flex" style="gap:12px;margin-bottom:16px">
+        <span class="avatar-sm" style="width:44px;height:44px;font-size:14px">{% if guru %}{{ guru.inisial }}{% else %}AD{% endif %}</span>
+        <div>
+          <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
+          <div class="hint">{{ request.user.username }}</div>
+        </div>
+      </div>
+      <table class="data" style="font-size:13px">
+        <tbody>
+          <tr><td class="hint">Peran</td><td>{% if is_admin_sekolah %}Administrator{% elif guru %}Guru{% else %}Pengguna{% endif %}</td></tr>
+          {% if guru %}
+          <tr><td class="hint">Data Guru</td><td>{{ guru.nama }}</td></tr>
+          <tr><td class="hint">NIP / NKTAM</td><td>{{ guru.nip|default:"-" }} / {{ guru.nktam|default:"-" }}</td></tr>
+          {% endif %}
+          <tr><td class="hint">Login terakhir</td><td>{{ request.user.last_login|date:"d/m/Y H:i"|default:"-" }}</td></tr>
+        </tbody>
+      </table>
+      {% if guru %}
+      <div class="note-box" style="margin-top:14px">Data profil guru (nama, NIP, NKTAM) diubah oleh admin melalui menu Data Guru.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

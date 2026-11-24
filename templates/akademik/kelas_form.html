@@ -1,0 +1,48 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if kelas %}Ubah Kelas{% else %}Tambah Kelas{% endif %}{% endblock %}
+{% block topbar %}{% if kelas %}Ubah Kelas{% else %}Tambah Kelas{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:tahun_list' %}">Tahun Pelajaran</a>
+  <span>/</span>
+  <span>{% if kelas %}Ubah{% else %}Tambah{% endif %} Kelas</span>
+</div>
+<div style="max-width:620px">
+  <form method="post">
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Data Kelas</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.academic_year.id_for_label }}">Tahun Pelajaran</label>
+            {{ form.academic_year }}{{ form.academic_year.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.tingkat.id_for_label }}">Tingkat</label>
+            {{ form.tingkat }}{{ form.tingkat.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.nama.id_for_label }}">Nama Kelas</label>
+            {{ form.nama }}{{ form.nama.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ form.fase.id_for_label }}">Fase</label>
+            {{ form.fase }}{{ form.fase.errors }}
+          </div>
+          <div class="field full">
+            <label for="{{ form.wali_kelas_guru.id_for_label }}">Wali Kelas</label>
+            {{ form.wali_kelas_guru }}{{ form.wali_kelas_guru.errors }}
+            <div class="help">Wali kelas dapat mengisi catatan, absensi, dan ekstrakurikuler.</div>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:18px">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan</button>
+          <a class="btn" href="{% url 'akademik:tahun_list' %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

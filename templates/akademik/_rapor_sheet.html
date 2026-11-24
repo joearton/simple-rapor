@@ -1,0 +1,152 @@
+{% load akademik_extras %}
+  <div class="rapor-sheet{% if page_break %} page-break{% endif %} font-{{ school.font_rapor }}"
+       style="width: {{ school.lebar_kertas_mm }}mm; min-height: {{ school.tinggi_kertas_mm }}mm; font-size: {{ school.ukuran_font }}pt;">
+    <div class="rapor-head{% if school.logo and school.tampilkan_logo %} dengan-logo{% endif %}">
+      {% if school.logo and school.tampilkan_logo %}
+      <img src="{{ school.logo.url }}" class="rapor-logo" style="height: {{ school.ukuran_logo }}px" alt="Logo {{ school.nama }}">
+      {% endif %}
+      <div class="rapor-kop">
+        {% if school.tampilkan_header %}
+        <div class="kementerian">{{ school.majelis }}</div>
+        <div class="kementerian">{{ school.pimpinan_daerah }}</div>
+        {% endif %}
+        <div class="sekolah">{{ school.nama }}</div>
+        {% if school.tampilkan_alamat %}
+        <div class="alamat">
+          {{ school.alamat }}{% if school.desa %}, {{ school.desa }}{% endif %}{% if school.kecamatan %}, Kec. {{ school.kecamatan }}{% endif %}{% if school.kabupaten %}, {{ school.kabupaten }}{% endif %}{% if school.provinsi %}, {{ school.provinsi }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="rapor-title">
+      <h2>{{ school.judul_rapor }}</h2>
+      {% if school.subjudul_rapor %}<div class="sub">{{ school.subjudul_rapor }}</div>{% endif %}
+    </div>
+
+    <table class="identitas-table">
+      <tr>
+        <td class="label">Nama Peserta Didik</td>
+        <td class="colon">:</td>
+        <td class="value">{{ student.nama }}</td>
+        <td class="label">Kelas</td>
+        <td class="colon">:</td>
+        <td class="value">{{ student.class_group.nama_lengkap }}</td>
+      </tr>
+      <tr>
+        <td class="label">NIS / NISN</td>
+        <td class="colon">:</td>
+        <td class="value">{{ student.nis|default:"-" }} / {{ student.nisn|default:"-" }}</td>
+        <td class="label">Fase</td>
+        <td class="colon">:</td>
+        <td class="value">{{ student.class_group.fase }}</td>
+      </tr>
+      <tr>
+        <td class="label">Sekolah</td>
+        <td class="colon">:</td>
+        <td class="value">{{ school.nama }}</td>
+        <td class="label">Semester</td>
+        <td class="colon">:</td>
+        <td class="value">{{ semester.nama }}</td>
+      </tr>
+      <tr>
+        <td class="label">Alamat</td>
+        <td class="colon">:</td>
+        <td class="value">{{ school.alamat }}</td>
+        <td class="label">Tahun Pelajaran</td>
+        <td class="colon">:</td>
+        <td class="value">{{ semester.academic_year.tahun }}</td>
+      </tr>
+    </table>
+
+    <table class="rapor-table">
+      <thead>
+        <tr>
+          <th style="width:6%">No</th>
+          <th style="width:27%">Mata Pelajaran</th>
+          <th style="width:12%">Nilai Akhir</th>
+          <th>Capaian Kompetensi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in mapel_rows %}
+        <tr>
+          <td class="no">{{ forloop.counter }}</td>
+          <td class="mapel">{{ row.subject.nama }}</td>
+          <td class="nilai">{{ row.nilai|rupiah_nilai }}</td>
+          <td>{{ row.capaian|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if school.tampilkan_ekskul %}
+    <div class="rapor-subtitle">Ekstrakurikuler</div>
+    <table class="rapor-table">
+      <thead>
+        <tr>
+          <th style="width:6%">No</th>
+          <th style="width:40%">Ekstrakurikuler</th>
+          <th style="width:16%">Predikat</th>
+          <th>Keterangan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for eks in ekskul_rows %}
+        <tr>
+          <td class="no">{{ forloop.counter }}</td>
+          <td>{{ eks.nama|default:"" }}</td>
+          <td class="c">{{ eks.predikat|default:"" }}</td>
+          <td>{{ eks.deskripsi|default:"" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if school.tampilkan_absensi or school.tampilkan_catatan %}
+    <div class="rapor-footer-grid{% if not school.tampilkan_absensi or not school.tampilkan_catatan %} single{% endif %}">
+      {% if school.tampilkan_absensi %}
+      <div class="rapor-box">
+        <h4>Ketidakhadiran</h4>
+        <div class="absensi-row"><span>Sakit</span><span>{{ catatan.sakit|default:0 }} hari</span></div>
+        <div class="absensi-row"><span>Izin</span><span>{{ catatan.izin|default:0 }} hari</span></div>
+        <div class="absensi-row"><span>Tanpa Keterangan</span><span>{{ catatan.alpa|default:0 }} hari</span></div>
+      </div>
+      {% endif %}
+      {% if school.tampilkan_catatan %}
+      <div class="rapor-box">
+        <h4>Catatan Wali Kelas</h4>
+        <div class="catatan-text">{{ catatan.catatan|default:"" }}</div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="tanggal">{{ school.tempat_rapor }}, {% tanggal_sekarang %}</div>
+
+    <div class="signature-row">
+      {% if school.tampilkan_ttd_orang_tua %}
+      <div class="signature-col">
+        <div class="role">Mengetahui,</div>
+        <div class="role">{{ school.label_ttd_orang_tua }}</div>
+        <div class="space"></div>
+        <div class="name">( ................................. )</div>
+      </div>
+      {% endif %}
+      {% if school.tampilkan_ttd_kepala %}
+      <div class="signature-col tengah">
+        <div class="role">{{ school.label_ttd_kepala }}</div>
+        <div class="space"></div>
+        <div class="name">{{ school.kepala_sekolah }}</div>
+      </div>
+      {% endif %}
+      {% if school.tampilkan_ttd_wali %}
+      <div class="signature-col tengah">
+        <div class="role">{{ school.label_ttd_wali }}</div>
+        <div class="space"></div>
+        <div class="name">{{ student.class_group.nama_wali|default:"-" }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>

@@ -1,0 +1,75 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Mata Pelajaran{% endblock %}
+{% block topbar %}Mata Pelajaran{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Mata Pelajaran</h2>
+    <p>Kelola daftar mata pelajaran dan lihat guru pengampu pada kelas {{ kelas.nama_lengkap|default:"-" }}.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:ekspor' 'mapel' %}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+    <a class="btn" href="{% url 'akademik:impor' 'mapel' %}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+    <a class="btn btn-primary" href="{% url 'akademik:mapel_tambah' %}"><svg class="icon"><use href="#i-plus"/></svg> Tambah Mapel</a>
+    <a class="btn" href="{% url 'akademik:mengajar' %}"><svg class="icon"><use href="#i-badge"/></svg> Pembagian Mengajar</a>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>Daftar Mata Pelajaran</h3>
+    <span class="hint">{{ page_obj.paginator.count }} mapel</span>
+  </div>
+  <form class="filter-bar" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama mata pelajaran...">
+    <select class="form-input" name="guru">
+      <option value="">Semua guru pengampu</option>
+      {% for guru in teachers %}
+      <option value="{{ guru.id }}" {% if guru_filter == guru.id|stringformat:'s' %}selected{% endif %}>{{ guru.nama }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th class="num" style="width:70px">Urutan</th>
+          <th>Mata Pelajaran</th>
+          <th class="num">Jumlah TP</th>
+          <th>Guru Pengampu</th>
+          <th style="width:160px">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="num">{{ row.subject.urutan }}</td>
+          <td class="nama">{{ row.subject.nama }}</td>
+          <td class="num">{{ row.subject.jumlah_tp }}</td>
+          <td>
+            {% if row.guru %}
+            <span class="row-flex"><span class="avatar-sm">{{ row.guru.inisial }}</span> {{ row.guru.nama }}</span>
+            {% else %}<span class="badge badge-gray">Belum ditetapkan</span>{% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <a class="btn btn-sm" href="{% url 'akademik:mapel_ubah' row.subject.id %}"><svg class="icon"><use href="#i-edit"/></svg> Ubah</a>
+              <form class="inline-form" method="post" action="{% url 'akademik:mapel_hapus' row.subject.id %}" onsubmit="return confirm('Hapus mapel {{ row.subject.nama|escapejs }}? Seluruh TP dan nilai mapel ini juga akan terhapus.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-danger"><svg class="icon"><use href="#i-trash"/></svg></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty"><strong>Belum ada mata pelajaran</strong>Tambahkan mata pelajaran untuk memulai penilaian.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'akademik/_pagination.html' %}
+</div>
+{% endblock %}

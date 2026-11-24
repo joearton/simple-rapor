@@ -1,0 +1,68 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Catatan & Absensi{% endblock %}
+{% block topbar %}Catatan &amp; Absensi{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Catatan &amp; Absensi</h2>
+    <p>Catatan wali kelas dan rekap ketidakhadiran semester {{ semester_aktif.nama|default:"-" }}.{% if guru %} Wali Kelas: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:ekspor' 'catatan' %}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+    <a class="btn" href="{% url 'akademik:impor' 'catatan' %}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get" style="border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px">
+  <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+  <select class="form-input" name="status">
+    <option value="">Semua siswa</option>
+    <option value="sudah" {% if status_filter == 'sudah' %}selected{% endif %}>Sudah diisi</option>
+    <option value="belum" {% if status_filter == 'belum' %}selected{% endif %}>Belum diisi</option>
+  </select>
+  <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+  <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+</form>
+
+<form method="post" action="{% querystring %}">
+  {% csrf_token %}
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Catatan Wali Kelas</h3>
+      <span class="hint">{{ page_obj.paginator.count }} siswa</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th class="num" style="width:48px">No</th>
+            <th style="min-width:180px">Nama Siswa</th>
+            <th>Deskripsi Catatan Guru</th>
+            <th class="num" style="width:66px">Sakit</th>
+            <th class="num" style="width:66px">Izin</th>
+            <th class="num" style="width:80px">Alpa</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="num">{{ forloop.counter }}</td>
+            <td class="nama">{{ row.siswa.nama }}</td>
+            <td><textarea class="cell-text" name="catatan_{{ row.siswa.id }}" rows="2" placeholder="Catatan untuk rapor...">{{ row.catatan.catatan|default:'' }}</textarea></td>
+            <td class="num"><input class="cell-input" type="number" min="0" name="sakit_{{ row.siswa.id }}" value="{{ row.catatan.sakit|default:0 }}"></td>
+            <td class="num"><input class="cell-input" type="number" min="0" name="izin_{{ row.siswa.id }}" value="{{ row.catatan.izin|default:0 }}"></td>
+            <td class="num"><input class="cell-input" type="number" min="0" name="alpa_{{ row.siswa.id }}" value="{{ row.catatan.alpa|default:0 }}"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'akademik/_pagination.html' %}
+    <div class="panel-body" style="border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="hint">Alpa = tanpa keterangan. Isian cuti/keterangan lain dapat ditulis pada catatan.</span>
+      <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Catatan</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

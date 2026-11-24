@@ -1,0 +1,97 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Tujuan Pembelajaran{% endblock %}
+{% block topbar %}Tujuan Pembelajaran{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:tp_menu' %}">Tujuan Pembelajaran</a>
+  <span>/</span>
+  <span>{{ subject.nama }}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{{ subject.nama }}</h2>
+    <p>{{ page_obj.paginator.count }} tujuan pembelajaran &middot; Tahun Pelajaran <strong>{{ tahun.tahun }}</strong>.{% if guru %} Guru pengampu: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:ekspor' 'tp' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+    <a class="btn" href="{% url 'akademik:impor' 'tp' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+    <a class="btn" href="{% url 'akademik:tp_menu' %}"><svg class="icon"><use href="#i-back"/></svg> Pilih Mapel</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get" style="border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px">
+  <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari tujuan pembelajaran...">
+  <select class="form-input" name="status">
+    <option value="aktif" {% if status_filter == 'aktif' %}selected{% endif %}>TP aktif</option>
+    <option value="arsip" {% if status_filter == 'arsip' %}selected{% endif %}>TP arsip</option>
+    <option value="semua" {% if status_filter == 'semua' %}selected{% endif %}>Semua TP</option>
+  </select>
+  <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+  <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+</form>
+
+<form method="post" action="{% querystring %}">
+  {% csrf_token %}
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Daftar Tujuan Pembelajaran</h3>
+      <span class="hint">TP terikat pada tahun pelajaran {{ tahun.tahun }}</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th class="num" style="width:70px">No TP</th>
+            <th>Tujuan Pembelajaran / Lingkup Materi</th>
+            <th class="num" style="width:60px">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tp in objectives %}
+          <tr>
+            <td class="num">
+              <span class="badge {% if tp.aktif %}badge-green{% else %}badge-gray{% endif %}">TP {{ tp.nomor }}</span>
+              {% if not tp.aktif %}<span class="badge badge-gold">Arsip</span>{% endif %}
+            </td>
+            <td><textarea class="cell-text" name="tp_{{ tp.id }}" rows="2">{{ tp.deskripsi }}</textarea></td>
+            <td class="num">
+              {% if tp.aktif %}
+              <button type="submit" class="btn btn-sm btn-danger" form="aksi-{{ tp.id }}"
+                      onclick="return confirm('Hapus TP {{ tp.nomor }}? TP yang sudah memiliki nilai akan diarsipkan.');" title="Hapus / arsipkan TP">
+                <svg class="icon"><use href="#i-trash"/></svg>
+              </button>
+              {% else %}
+              <button type="submit" class="btn btn-sm" form="aksi-{{ tp.id }}" title="Aktifkan kembali">
+                <svg class="icon"><use href="#i-save"/></svg> Aktifkan
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          {% for i in baris_baru %}
+          <tr>
+            <td class="num"><span class="badge badge-gray">Baru</span></td>
+            <td><textarea class="cell-text" name="baru_{{ i }}" rows="2" placeholder="Tulis tujuan pembelajaran baru..."></textarea></td>
+            <td></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'akademik/_pagination.html' %}
+    <div class="panel-body" style="border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="hint">3 baris kosong disediakan untuk menambah TP baru.</span>
+      <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan TP</button>
+    </div>
+  </div>
+</form>
+
+{% for tp in objectives %}
+<form method="post" id="aksi-{{ tp.id }}" action="{% url 'akademik:tp_list' subject.id %}{% querystring %}">
+  {% csrf_token %}
+  <input type="hidden" name="aksi" value="{% if tp.aktif %}hapus{% else %}aktifkan{% endif %}">
+  <input type="hidden" name="tp_id" value="{{ tp.id }}">
+</form>
+{% endfor %}
+{% endblock %}

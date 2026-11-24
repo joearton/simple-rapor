@@ -1,0 +1,109 @@
+{% load static akademik_extras %}<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sampul Rapor {{ student.nama }}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/rapor.css' %}">
+  <style>@page { size: {{ school.lebar_kertas_mm }}mm {{ school.tinggi_kertas_mm }}mm; margin: 12mm 14mm; }</style>
+</head>
+<body class="rapor-page">
+  <div class="rapor-toolbar no-print">
+    <a class="btn" href="{% url 'akademik:rapor_index' %}"><svg class="icon"><use href="#i-back"/></svg> Kembali</a>
+    <div style="display:flex;gap:8px">
+      <a class="btn" href="{% url 'akademik:rapor_detail' student.id %}"><svg class="icon"><use href="#i-file"/></svg> Rapor</a>
+      <button type="button" class="btn btn-gold" onclick="window.print()"><svg class="icon"><use href="#i-printer"/></svg> Cetak Sampul</button>
+    </div>
+  </div>
+
+  <div class="rapor-sheet sampul-sheet font-{{ school.font_rapor }}"
+       style="width: {{ school.lebar_kertas_mm }}mm; min-height: {{ school.tinggi_kertas_mm }}mm; font-size: {{ school.ukuran_font }}pt;">
+    <div class="sampul-top">
+      {% if school.tampilkan_header %}
+      <div class="sampul-majelis">{{ school.majelis }}</div>
+      <div class="sampul-majelis">{{ school.pimpinan_daerah }}</div>
+      {% endif %}
+      <div class="sampul-school">{{ school.nama }}</div>
+    </div>
+
+    {% if school.logo and school.tampilkan_logo %}
+    <div class="sampul-logo-img-wrap">
+      <img src="{{ school.logo.url }}" alt="Logo {{ school.nama }}" style="max-height: 105px; max-width: 165px">
+    </div>
+    {% else %}
+    <div class="sampul-logo">
+      <div>
+        <div class="l1">MAJELIS DIKDASMEN</div>
+        <div class="l2">SMPM</div>
+        <div class="l1">KOTABUMI</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="sampul-title">
+      <h1>LAPORAN HASIL BELAJAR</h1>
+      <h2>PESERTA DIDIK</h2>
+      <div class="thn">Tahun Pelajaran {{ semester.academic_year.tahun }}</div>
+    </div>
+
+    <div class="sampul-name">
+      <div class="label">Nama Peserta Didik :</div>
+      <div class="nama">{{ student.nama }}</div>
+      <div class="nis">NIS / NISN : {{ student.nis|default:"-" }} / {{ student.nisn|default:"-" }}</div>
+    </div>
+
+    <div class="sampul-identitas">
+      <h3>Identitas Sekolah</h3>
+      <table class="compact">
+        <tr>
+          <td class="label">Nama Sekolah</td><td class="colon">:</td><td>{{ school.nama }}</td>
+          <td class="label">NPSN</td><td class="colon">:</td><td>{{ school.npsn|default:"-" }}</td>
+        </tr>
+        <tr>
+          <td class="label">Alamat</td><td class="colon">:</td><td>{{ school.alamat }}</td>
+          <td class="label">Kode Pos</td><td class="colon">:</td><td>{{ school.kode_pos }}</td>
+        </tr>
+        <tr>
+          <td class="label">Desa/Kelurahan</td><td class="colon">:</td><td>{{ school.desa }}</td>
+          <td class="label">Kecamatan</td><td class="colon">:</td><td>{{ school.kecamatan }}</td>
+        </tr>
+        <tr>
+          <td class="label">Kabupaten/Kota</td><td class="colon">:</td><td>{{ school.kabupaten }}</td>
+          <td class="label">Provinsi</td><td class="colon">:</td><td>{{ school.provinsi }}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="sampul-identitas" style="margin-top:4mm">
+      <h3>Identitas Peserta Didik</h3>
+      <table class="compact">
+        <tr>
+          <td class="label">Nama Peserta Didik</td><td class="colon">:</td><td>{{ student.nama }}</td>
+          <td class="label">NIS / NISN</td><td class="colon">:</td><td>{{ student.nis|default:"-" }} / {{ student.nisn|default:"-" }}</td>
+        </tr>
+        <tr>
+          <td class="label">Tempat, Tanggal Lahir</td><td class="colon">:</td><td>{{ student.tempat_lahir }}{% if student.tanggal_lahir %}, {{ student.tanggal_lahir|tanggal_id }}{% endif %}</td>
+          <td class="label">Jenis Kelamin</td><td class="colon">:</td><td>{{ student.jk_label }}</td>
+        </tr>
+        <tr>
+          <td class="label">Agama</td><td class="colon">:</td><td>{{ student.agama }}</td>
+          <td class="label">Pendidikan Sebelumnya</td><td class="colon">:</td><td>{{ student.pendidikan_sebelumnya }}</td>
+        </tr>
+        <tr>
+          <td class="label">Alamat Peserta Didik</td><td class="colon">:</td><td>{{ student.alamat }}</td>
+          <td class="label">Nama Ayah</td><td class="colon">:</td><td>{{ student.nama_ayah }}</td>
+        </tr>
+        <tr>
+          <td class="label">Nama Ibu</td><td class="colon">:</td><td>{{ student.nama_ibu }}</td>
+          <td class="label">Pekerjaan Ayah</td><td class="colon">:</td><td>{{ student.pekerjaan_ayah }}</td>
+        </tr>
+        <tr>
+          <td class="label">Pekerjaan Ibu</td><td class="colon">:</td><td>{{ student.pekerjaan_ibu }}</td>
+          <td class="label">Alamat Orang Tua</td><td class="colon">:</td><td>{{ student.alamat_orang_tua }}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

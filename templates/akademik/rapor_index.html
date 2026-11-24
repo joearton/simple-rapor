@@ -1,0 +1,59 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Cetak Rapor{% endblock %}
+{% block topbar %}Cetak Rapor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Cetak Rapor</h2>
+    <p>Pilih siswa untuk membuka rapor siap cetak. Gunakan ukuran kertas A4.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-gold" href="{% url 'akademik:cetak_semua' %}" target="_blank"><svg class="icon"><use href="#i-printer"/></svg> Cetak Semua Rapor</a>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>Daftar Siswa</h3>
+    <span class="hint">Semester {{ semester.nama|default:"-" }} &middot; {{ semester.academic_year.tahun|default:"-" }}</span>
+  </div>
+  <form class="filter-bar" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th class="num" style="width:48px">No</th>
+          <th>Nama Siswa</th>
+          <th>NIS / NISN</th>
+          <th class="num">L/P</th>
+          <th style="width:260px">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for siswa in siswa_list %}
+        <tr>
+          <td class="num">{{ siswa.no_urut }}</td>
+          <td><span class="nama">{{ siswa.nama }}</span></td>
+          <td>{{ siswa.nis|default:"-" }} / {{ siswa.nisn|default:"-" }}</td>
+          <td class="num">{{ siswa.jenis_kelamin }}</td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <a class="btn btn-sm btn-primary" href="{% url 'akademik:rapor_detail' siswa.id %}" target="_blank"><svg class="icon"><use href="#i-printer"/></svg> Rapor</a>
+              <a class="btn btn-sm" href="{% url 'akademik:rapor_sampul' siswa.id %}" target="_blank"><svg class="icon"><use href="#i-file"/></svg> Sampul</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty"><strong>Belum ada siswa</strong>Tambahkan data siswa terlebih dahulu.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'akademik/_pagination.html' %}
+</div>
+{% endblock %}

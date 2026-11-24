@@ -1,0 +1,56 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Impor {{ info.judul }}{% endblock %}
+{% block topbar %}Impor {{ info.judul }}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{{ back_url }}">{{ info.judul }}</a>
+  <span>/</span>
+  <span>Impor</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>Impor {{ info.judul }}</h2>
+    <p>{{ info.deskripsi }}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ back_url }}"><svg class="icon"><use href="#i-back"/></svg> Kembali</a>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="panel">
+    <div class="panel-head"><h3>Unggah File Excel</h3></div>
+    <div class="panel-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="field" style="margin-bottom:14px">
+          <label for="file">File Excel (.xlsx)</label>
+          <input class="form-input" type="file" name="file" id="file" accept=".xlsx,.xlsm" required>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Impor Sekarang</button>
+          <a class="btn" href="{{ template_url }}"><svg class="icon"><use href="#i-file"/></svg> Unduh Template</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h3>Petunjuk</h3></div>
+    <div class="panel-body">
+      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#3d4d45">
+        <li>Gunakan file <strong>.xlsx</strong> dengan nama kolom sesuai template.</li>
+        <li>Baris pertama adalah judul kolom dan tidak boleh diubah.</li>
+        <li>Data siswa dicocokkan berdasarkan NISN, NIS, lalu nama.</li>
+        <li>Sel kosong pada impor nilai berarti <strong>tidak mengubah</strong> nilai lama.</li>
+        <li>Jika ada baris bermasalah, seluruh proses dibatalkan agar data tetap aman.</li>
+        <li>Unduh template kosong untuk memulai format yang benar.</li>
+      </ul>
+      {% if subject %}
+      <div class="note-box" style="margin-top:14px">Mata pelajaran: <strong>{{ subject.nama }}</strong><br>Semester: <strong>{{ semester.nama }} {{ semester.academic_year.tahun }}</strong></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

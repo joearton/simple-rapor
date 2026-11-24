@@ -1,0 +1,91 @@
+{% extends 'akademik/base.html' %}
+{% load akademik_extras %}
+{% block title %}Data Siswa{% endblock %}
+{% block topbar %}Data Siswa{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Data Siswa</h2>
+    <p>{{ total }} peserta didik pada kelas {{ kelas_aktif.nama_lengkap|default:"-" }}.</p>
+  </div>
+  <div class="actions">
+    {% if bisa_ubah %}
+    <a class="btn" href="{% url 'akademik:ekspor' 'siswa' %}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+    <a class="btn" href="{% url 'akademik:impor' 'siswa' %}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+    <a class="btn btn-primary" href="{% url 'akademik:siswa_tambah' %}"><svg class="icon"><use href="#i-plus"/></svg> Tambah Siswa</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>Daftar Peserta Didik</h3>
+    <span class="hint">{{ total }} data</span>
+  </div>
+  <form class="filter-bar" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    <select class="form-input" name="jk">
+      <option value="">Semua L/P</option>
+      <option value="L" {% if jk_filter == 'L' %}selected{% endif %}>Laki-Laki</option>
+      <option value="P" {% if jk_filter == 'P' %}selected{% endif %}>Perempuan</option>
+    </select>
+    <select class="form-input" name="status">
+      <option value="aktif" {% if status_filter == 'aktif' %}selected{% endif %}>Aktif</option>
+      <option value="nonaktif" {% if status_filter == 'nonaktif' %}selected{% endif %}>Nonaktif</option>
+      <option value="semua" {% if status_filter == 'semua' %}selected{% endif %}>Semua status</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th class="num" style="width:52px">No</th>
+          <th>Nama Peserta Didik</th>
+          <th>NIS / NISN</th>
+          <th class="num">L/P</th>
+          <th>Tempat &amp; Tanggal Lahir</th>
+          <th>Orang Tua</th>
+          {% if bisa_ubah %}<th style="width:110px">Aksi</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for siswa in siswa_list %}
+        <tr>
+          <td class="num">{{ siswa.no_urut }}</td>
+          <td>
+            <span class="nama">{{ siswa.nama }}</span>
+            <span class="sub">{{ siswa.alamat|default:"-" }}</span>
+          </td>
+          <td>{{ siswa.nis|default:"-" }} / {{ siswa.nisn|default:"-" }}</td>
+          <td class="num">{{ siswa.jenis_kelamin }}</td>
+          <td>
+            {{ siswa.tempat_lahir|default:"-" }}{% if siswa.tanggal_lahir %}, {{ siswa.tanggal_lahir|tanggal_id }}{% endif %}
+          </td>
+          <td>
+            {{ siswa.nama_ayah|default:"-" }}
+            <span class="sub">Ibu: {{ siswa.nama_ibu|default:"-" }}</span>
+          </td>
+          {% if bisa_ubah %}
+          <td>
+            <div style="display:flex;gap:6px">
+              <a class="btn btn-sm" href="{% url 'akademik:siswa_ubah' siswa.id %}"><svg class="icon"><use href="#i-edit"/></svg> Ubah</a>
+              <form class="inline-form" method="post" action="{% url 'akademik:siswa_hapus' siswa.id %}" onsubmit="return confirm('Hapus data siswa {{ siswa.nama|escapejs }}? Semua nilai terkait juga akan terhapus.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-danger"><svg class="icon"><use href="#i-trash"/></svg></button>
+              </form>
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{% if bisa_ubah %}7{% else %}6{% endif %}" class="empty"><strong>Belum ada data siswa</strong>Tambahkan siswa atau impor dari Excel.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'akademik/_pagination.html' %}
+</div>
+{% endblock %}

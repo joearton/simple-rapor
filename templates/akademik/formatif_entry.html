@@ -1,0 +1,143 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Asesmen Formatif{% endblock %}
+{% block topbar %}Asesmen Formatif{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:formatif_menu' %}">Asesmen Formatif</a>
+  <span>/</span>
+  <span>{{ subject.nama }}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{{ subject.nama }}</h2>
+    <p>Nilai setiap tujuan pembelajaran (1-4). Deskripsi rapor dihitung otomatis.{% if guru %} Guru penilai: <strong>{{ guru.nama }}</strong>.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:ekspor' 'formatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+    <a class="btn" href="{% url 'akademik:impor' 'formatif' %}?mapel={{ subject.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+    <a class="btn" href="{% url 'akademik:formatif_menu' %}"><svg class="icon"><use href="#i-back"/></svg> Pilih Mapel</a>
+    <a class="btn" href="{% url 'akademik:tp_list' subject.id %}"><svg class="icon"><use href="#i-target"/></svg> Kelola TP</a>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="toolbar">
+    <div class="left legend">
+      <span><b>4</b> Sangat Menguasai</span>
+      <span><b>3</b> Baik</span>
+      <span><b>2</b> Cukup</span>
+      <span><b>1</b> Perlu Bimbingan</span>
+    </div>
+    <span class="hint">{{ page_obj.paginator.count }} siswa &middot; {{ objectives|length }} TP</span>
+  </div>
+
+  <form class="filter-bar" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari nama, NIS, atau NISN...">
+    <select class="form-input" name="status">
+      <option value="">Semua siswa</option>
+      <option value="sudah" {% if status_filter == 'sudah' %}selected{% endif %}>Sudah ada nilai</option>
+      <option value="belum" {% if status_filter == 'belum' %}selected{% endif %}>Belum ada nilai</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+
+  {% if objectives %}
+  <form method="post" action="{% querystring %}" id="formatif-form">
+    {% csrf_token %}
+    <div class="table-wrap">
+      <table class="data" id="formatif-table">
+        <thead>
+          <tr>
+            <th class="num" style="width:48px">No</th>
+            <th style="min-width:190px">Nama Siswa</th>
+            {% for tp in objectives %}
+            <th class="num" title="{{ tp.deskripsi }}">TP {{ tp.nomor }}</th>
+            {% endfor %}
+            <th style="min-width:300px">Deskripsi Rapor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr data-row>
+            <td class="num">{{ forloop.counter }}</td>
+            <td class="nama">{{ row.siswa.nama }}</td>
+            {% for sel in row.nilai %}
+            <td class="num">
+              <input class="cell-input score-input" type="number" min="1" max="4" inputmode="numeric"
+                     name="f_{{ row.siswa.id }}_{{ sel.tp.id }}"
+                     value="{{ sel.nilai|default_if_none:'' }}" data-tp="{{ sel.tp.nomor }}">
+            </td>
+            {% endfor %}
+            <td class="desc-cell" data-desc>{{ row.capaian.teks }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'akademik/_pagination.html' %}
+    <div class="panel-body" style="border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="hint">Perubahan nilai langsung memperbarui pratinjau deskripsi.</span>
+      <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Nilai Formatif</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="empty">
+    <strong>Belum ada tujuan pembelajaran</strong>
+    Tambahkan TP terlebih dahulu untuk mulai menilai.
+    <div style="margin-top:10px"><a class="btn btn-primary" href="{% url 'akademik:tp_list' subject.id %}">Tambah TP</a></div>
+  </div>
+  {% endif %}
+</div>
+
+{{ tp_data|json_script:"tp-data" }}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById('tp-data').textContent);
+  const table = document.getElementById('formatif-table');
+  if (!table) return;
+
+  function warna(input) {
+    input.classList.remove('score-1', 'score-2', 'score-3', 'score-4');
+    if (input.value) input.classList.add('score-' + input.value);
+  }
+
+  function deskripsi(row) {
+    const inputs = Array.from(row.querySelectorAll('.score-input'));
+    let unggul = null, perlu = null;
+    let maks = -1, minPos = 5;
+    inputs.forEach(function (input) {
+      warna(input);
+      const v = parseInt(input.value, 10);
+      if (!v) return;
+      const nomor = parseInt(input.dataset.tp, 10);
+      if (v > maks) { maks = v; unggul = nomor; }
+      if (v < minPos) { minPos = v; perlu = nomor; }
+    });
+    const teks = [];
+    const cari = (nomor) => data.find(d => d.nomor === nomor);
+    if (unggul !== null && maks >= 3) {
+      const tp = cari(unggul);
+      if (tp) teks.push('Ananda sangat menguasai dalam ' + tp.deskripsi + '.');
+    }
+    if (perlu !== null && minPos <= 2) {
+      const tp = cari(perlu);
+      if (tp) teks.push('Ananda perlu bimbingan dalam ' + tp.deskripsi + '.');
+    }
+    row.querySelector('[data-desc]').textContent = teks.join(' ');
+  }
+
+  table.addEventListener('input', function (e) {
+    if (e.target.classList.contains('score-input')) {
+      deskripsi(e.target.closest('tr'));
+    }
+  });
+
+  table.querySelectorAll('tr[data-row]').forEach(deskripsi);
+})();
+</script>
+{% endblock %}

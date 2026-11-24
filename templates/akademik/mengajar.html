@@ -1,0 +1,89 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Pembagian Mengajar{% endblock %}
+{% block topbar %}Pembagian Mengajar{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Pembagian Mengajar</h2>
+    <p>Tetapkan guru pengampu setiap mata pelajaran dan wali kelas untuk {{ kelas.nama_lengkap|default:"-" }} &middot; {{ semester.academic_year.tahun|default:"-" }}.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'akademik:guru_list' %}"><svg class="icon"><use href="#i-user"/></svg> Data Guru</a>
+  </div>
+</div>
+
+{% if not teachers %}
+<div class="alert error">Belum ada guru aktif. <a href="{% url 'akademik:guru_tambah' %}">Tambahkan data guru</a> terlebih dahulu.</div>
+{% endif %}
+
+<form class="filter-bar" method="get" style="border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px">
+  <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari mata pelajaran...">
+  <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+  <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+</form>
+
+<form method="post" action="{% querystring %}">
+  {% csrf_token %}
+  <div class="panel" style="margin-bottom:18px">
+    <div class="panel-head"><h3>Wali Kelas</h3><span class="hint">{{ kelas.nama_lengkap|default:"-" }}</span></div>
+    <div class="panel-body">
+      <div class="form-grid">
+        <div class="field">
+          <label for="wali_kelas_guru">Guru Wali Kelas</label>
+          <select class="form-input" name="wali_kelas_guru" id="wali_kelas_guru">
+            <option value="">-- Belum ditetapkan --</option>
+            {% for guru in teachers %}
+            <option value="{{ guru.id }}" {% if guru.id == wali_kelas_guru_id %}selected{% endif %}>{{ guru.nama }}</option>
+            {% endfor %}
+          </select>
+          <div class="help">Wali kelas dapat mengisi catatan, absensi, dan ekstrakurikuler.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Guru Pengampu Mata Pelajaran</h3>
+      <span class="hint">{{ page_obj.paginator.count }} mapel</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th class="num" style="width:52px">No</th>
+            <th>Mata Pelajaran</th>
+            <th class="num">TP</th>
+            <th style="min-width:260px">Guru Pengampu</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="num">{{ forloop.counter }}</td>
+            <td class="nama">{{ row.subject.nama }}</td>
+            <td class="num">{{ row.subject.tujuan_list.count }}</td>
+            <td>
+              <select class="form-input" name="mapel_{{ row.subject.id }}">
+                <option value="">-- Belum ditetapkan --</option>
+                {% for guru in teachers %}
+                <option value="{{ guru.id }}" {% if guru.id == row.guru_id %}selected{% endif %}>{{ guru.nama }}</option>
+                {% endfor %}
+              </select>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="empty"><strong>Belum ada mata pelajaran</strong>Tambahkan mapel terlebih dahulu.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'akademik/_pagination.html' %}
+    <div class="panel-body" style="border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="hint">Guru hanya dapat mengisi TP dan nilai pada mapel yang ditugaskan kepadanya.</span>
+      <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Pembagian</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

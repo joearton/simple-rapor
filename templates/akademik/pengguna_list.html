@@ -1,0 +1,86 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Manajemen Pengguna{% endblock %}
+{% block topbar %}Manajemen Pengguna{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Manajemen Pengguna</h2>
+    <p>Kelola akun login admin, guru, dan pengguna lain. Hanya admin yang dapat mengakses halaman ini.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'akademik:pengguna_tambah' %}"><svg class="icon"><use href="#i-plus"/></svg> Tambah Pengguna</a>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h3>Daftar Akun</h3>
+    <span class="hint">{{ page_obj.paginator.count }} akun</span>
+  </div>
+  <form class="filter-bar" method="get">
+    <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Cari username, nama, e-mail...">
+    <select class="form-input" name="role">
+      <option value="">Semua peran</option>
+      <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Administrator</option>
+      <option value="guru" {% if role_filter == 'guru' %}selected{% endif %}>Guru</option>
+      <option value="pengguna" {% if role_filter == 'pengguna' %}selected{% endif %}>Pengguna</option>
+    </select>
+    <select class="form-input" name="status">
+      <option value="">Semua status</option>
+      <option value="aktif" {% if status_filter == 'aktif' %}selected{% endif %}>Aktif</option>
+      <option value="nonaktif" {% if status_filter == 'nonaktif' %}selected{% endif %}>Nonaktif</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+    <a class="btn btn-sm" href="{{ request.path }}">Reset</a>
+  </form>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th class="num" style="width:48px">No</th>
+          <th>Username</th>
+          <th>Nama</th>
+          <th>Peran</th>
+          <th>Data Guru</th>
+          <th class="num">Status</th>
+          <th>Login Terakhir</th>
+          <th style="width:230px">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="num">{{ forloop.counter }}</td>
+          <td class="nama">{{ row.user.username }}</td>
+          <td>{{ row.user.get_full_name|default:"-" }}<span class="sub">{{ row.user.email|default:"-" }}</span></td>
+          <td>
+            {% if row.peran == 'Administrator' %}<span class="badge badge-green">Administrator</span>
+            {% elif row.peran == 'Guru' %}<span class="badge badge-gold">Guru</span>
+            {% else %}<span class="badge badge-gray">Pengguna</span>{% endif %}
+          </td>
+          <td>{{ row.guru.nama|default:"-" }}</td>
+          <td class="num">
+            {% if row.user.is_active %}<span class="badge badge-green">Aktif</span>{% else %}<span class="badge badge-red">Nonaktif</span>{% endif %}
+          </td>
+          <td>{{ row.user.last_login|date:"d/m/Y H:i"|default:"-" }}</td>
+          <td>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <a class="btn btn-sm" href="{% url 'akademik:pengguna_ubah' row.user.id %}"><svg class="icon"><use href="#i-edit"/></svg> Ubah</a>
+              <a class="btn btn-sm" href="{% url 'akademik:pengguna_reset_password' row.user.id %}"><svg class="icon"><use href="#i-key"/></svg> Reset</a>
+              {% if row.user != request.user %}
+              <form class="inline-form" method="post" action="{% url 'akademik:pengguna_hapus' row.user.id %}" onsubmit="return confirm('Hapus akun {{ row.user.username|escapejs }}?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-danger"><svg class="icon"><use href="#i-trash"/></svg></button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'akademik/_pagination.html' %}
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if tahun %}Ubah Tahun{% else %}Tambah Tahun{% endif %}{% endblock %}
+{% block topbar %}{% if tahun %}Ubah Tahun Pelajaran{% else %}Tambah Tahun Pelajaran{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:tahun_list' %}">Tahun Pelajaran</a>
+  <span>/</span>
+  <span>{% if tahun %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div style="max-width:620px">
+  <form method="post">
+    {% csrf_token %}
+    <div class="panel">
+      <div class="panel-head"><h3>Data Tahun Pelajaran</h3></div>
+      <div class="panel-body">
+        <div class="field" style="margin-bottom:16px">
+          <label for="{{ form.tahun.id_for_label }}">Tahun Pelajaran</label>
+          {{ form.tahun }}{{ form.tahun.errors }}
+          <div class="help">Contoh: 2026/2027.</div>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan</button>
+          <a class="btn" href="{% url 'akademik:tahun_list' %}">Batal</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

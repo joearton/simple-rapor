@@ -1,0 +1,137 @@
+{% extends 'akademik/base.html' %}
+{% block title %}{% if guru %}Ubah Guru{% else %}Tambah Guru{% endif %}{% endblock %}
+{% block topbar %}{% if guru %}Ubah Data Guru{% else %}Tambah Data Guru{% endif %}{% endblock %}
+
+{% block content %}
+<div class="crumb">
+  <a href="{% url 'akademik:guru_list' %}">Data Guru</a>
+  <span>/</span>
+  <span>{% if guru %}Ubah{% else %}Tambah{% endif %}</span>
+</div>
+<div class="page-head">
+  <div>
+    <h2>{% if guru %}{{ guru.nama }}{% else %}Guru Baru{% endif %}</h2>
+    <p>Lengkapi identitas, pendidikan, jabatan, dan akun login guru.</p>
+  </div>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="panel">
+    <div class="panel-head"><h3>Profil Guru</h3></div>
+    <div class="panel-body">
+      <div data-tab-group>
+        <div class="form-tabs" role="tablist">
+          <button type="button" class="tab-button active" data-tab-target="identitas">Identitas</button>
+          <button type="button" class="tab-button" data-tab-target="pendidikan">Pendidikan &amp; Jabatan</button>
+          <button type="button" class="tab-button" data-tab-target="akun">Akun Login</button>
+        </div>
+
+        <div class="tab-panel active" data-tab-panel="identitas">
+          {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+          <div class="form-grid">
+            <div class="field full">
+              <label for="{{ form.nama.id_for_label }}">Nama Guru</label>
+              {{ form.nama }}{{ form.nama.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.nik.id_for_label }}">NIK</label>
+              {{ form.nik }}{{ form.nik.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.nip.id_for_label }}">NIP</label>
+              {{ form.nip }}{{ form.nip.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.nktam.id_for_label }}">NKTAM</label>
+              {{ form.nktam }}{{ form.nktam.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.jenis_kelamin.id_for_label }}">Jenis Kelamin</label>
+              {{ form.jenis_kelamin }}{{ form.jenis_kelamin.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.tempat_lahir.id_for_label }}">Tempat Lahir</label>
+              {{ form.tempat_lahir }}{{ form.tempat_lahir.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.tanggal_lahir.id_for_label }}">Tanggal Lahir</label>
+              {{ form.tanggal_lahir }}{{ form.tanggal_lahir.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.email.id_for_label }}">E-mail</label>
+              {{ form.email }}{{ form.email.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.no_hp.id_for_label }}">Nomor Telepon</label>
+              {{ form.no_hp }}{{ form.no_hp.errors }}
+            </div>
+            <div class="field full">
+              <label for="{{ form.alamat.id_for_label }}">Alamat</label>
+              {{ form.alamat }}{{ form.alamat.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.aktif.id_for_label }}">Status Guru</label>
+              <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">
+                {{ form.aktif }} Aktif
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-tab-panel="pendidikan">
+          <div class="form-grid">
+            <div class="field full">
+              <label for="{{ form.pendidikan.id_for_label }}">Pendidikan Terakhir</label>
+              {{ form.pendidikan }}{{ form.pendidikan.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.jurusan.id_for_label }}">Jurusan</label>
+              {{ form.jurusan }}{{ form.jurusan.errors }}
+            </div>
+            <div class="field">
+              <label for="{{ form.tahun_lulus.id_for_label }}">Tahun Lulus</label>
+              {{ form.tahun_lulus }}{{ form.tahun_lulus.errors }}
+            </div>
+            <div class="field full">
+              <label for="{{ form.jabatan.id_for_label }}">Jabatan / Tugas</label>
+              {{ form.jabatan }}{{ form.jabatan.errors }}
+              <div class="help">Contoh: Guru Matematika, Guru TIK dan Koding, Operator/Staf Administrasi.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-tab-panel="akun">
+          <div class="form-grid">
+            <div class="field">
+              <label for="{{ form.username.id_for_label }}">Username</label>
+              {{ form.username }}{{ form.username.errors }}
+              <div class="help">{{ form.username.help_text }}</div>
+            </div>
+            <div class="field">
+              <label for="{{ form.password.id_for_label }}">Password</label>
+              {{ form.password }}{{ form.password.errors }}
+              <div class="help">{{ form.password.help_text }}</div>
+            </div>
+            <div class="field">
+              <label for="{{ form.akun_aktif.id_for_label }}">Status Akun</label>
+              <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">
+                {{ form.akun_aktif }} Dapat digunakan untuk login
+              </label>
+            </div>
+          </div>
+          <div class="note-box" style="margin-top:16px">
+            Setelah akun dibuat, atur mata pelajaran yang diampu pada menu
+            <a href="{% url 'akademik:mengajar' %}">Pembagian Mengajar</a>.
+          </div>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:20px">
+        <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Data Guru</button>
+        <a class="btn" href="{% url 'akademik:guru_list' %}">Batal</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

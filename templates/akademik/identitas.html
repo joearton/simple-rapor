@@ -1,0 +1,240 @@
+{% extends 'akademik/base.html' %}
+{% block title %}Identitas Sekolah{% endblock %}
+{% block topbar %}Identitas Sekolah{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Identitas Sekolah</h2>
+    <p>Data ini dipakai pada kepala rapor, sampul, dan halaman cetak.</p>
+  </div>
+</div>
+
+<form method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+  <div data-tab-group>
+    <div class="form-tabs" role="tablist">
+      <button type="button" class="tab-button active" data-tab-target="profil">Profil Sekolah</button>
+      <button type="button" class="tab-button" data-tab-target="logo">Logo &amp; Kop</button>
+      <button type="button" class="tab-button" data-tab-target="layout">Tata Letak Rapor</button>
+      <button type="button" class="tab-button" data-tab-target="kelas">Kelas Aktif</button>
+    </div>
+    <div class="tab-panel active" data-tab-panel="profil">
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Profil Sekolah</h3>
+      <span class="hint">Digunakan pada halaman rapor</span>
+    </div>
+    <div class="panel-body">
+      {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="form-grid">
+        <div class="field full">
+          <label for="{{ form.nama.id_for_label }}">Nama Sekolah</label>
+          {{ form.nama }}
+          {{ form.nama.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.npsn.id_for_label }}">NPSN</label>
+          {{ form.npsn }}
+        </div>
+        <div class="field">
+          <label for="{{ form.nss.id_for_label }}">NSS</label>
+          {{ form.nss }}
+        </div>
+        <div class="field full">
+          <label for="{{ form.alamat.id_for_label }}">Alamat Sekolah</label>
+          {{ form.alamat }}
+        </div>
+        <div class="field">
+          <label for="{{ form.kode_pos.id_for_label }}">Kode Pos</label>
+          {{ form.kode_pos }}
+        </div>
+        <div class="field">
+          <label for="{{ form.desa.id_for_label }}">Desa/Kelurahan</label>
+          {{ form.desa }}
+        </div>
+        <div class="field">
+          <label for="{{ form.kecamatan.id_for_label }}">Kecamatan</label>
+          {{ form.kecamatan }}
+        </div>
+        <div class="field">
+          <label for="{{ form.kabupaten.id_for_label }}">Kabupaten/Kota</label>
+          {{ form.kabupaten }}
+        </div>
+        <div class="field">
+          <label for="{{ form.provinsi.id_for_label }}">Provinsi</label>
+          {{ form.provinsi }}
+        </div>
+        <div class="field">
+          <label for="{{ form.website.id_for_label }}">Website</label>
+          {{ form.website }}
+        </div>
+        <div class="field full">
+          <label for="{{ form.email.id_for_label }}">E-mail</label>
+          {{ form.email }}
+        </div>
+        <div class="field">
+          <label for="{{ form.kepala_sekolah.id_for_label }}">Nama Kepala Sekolah</label>
+          {{ form.kepala_sekolah }}
+        </div>
+        <div class="field">
+          <label for="{{ form.nktam_kepala.id_for_label }}">NKTAM Kepala Sekolah</label>
+          {{ form.nktam_kepala }}
+        </div>
+        <div class="field full">
+          <label for="{{ form.majelis.id_for_label }}">Majelis (Sampul)</label>
+          {{ form.majelis }}
+        </div>
+        <div class="field full">
+          <label for="{{ form.pimpinan_daerah.id_for_label }}">Pimpinan Daerah (Sampul)</label>
+          {{ form.pimpinan_daerah }}
+        </div>
+        <div class="field">
+          <label for="{{ form.tempat_rapor.id_for_label }}">Tempat Penandatanganan Rapor</label>
+          {{ form.tempat_rapor }}
+        </div>
+      </div>
+    </div>
+  </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="logo">
+  <div class="section-title">Logo Sekolah</div>
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Logo &amp; Kop Rapor</h3>
+      <span class="hint">Logo tampil pada rapor dan sampul</span>
+    </div>
+    <div class="panel-body">
+      <div class="form-grid">
+        <div class="field">
+          <label for="{{ form.logo.id_for_label }}">File Logo</label>
+          {{ form.logo }}{{ form.logo.errors }}
+          <div class="help">Format gambar, maksimal 3 MB. Kosongkan jika tidak ingin mengubah.</div>
+        </div>
+        <div class="field">
+          <label>Pratinjau</label>
+          {% if sekolah.logo %}
+          <img src="{{ sekolah.logo.url }}" alt="Logo sekolah" style="max-height:80px;max-width:180px;border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff">
+          {% else %}
+          <div class="help">Belum ada logo. Logo bawaan berupa teks inisial akan digunakan.</div>
+          {% endif %}
+        </div>
+        <div class="field">
+          <label for="{{ form.ukuran_logo.id_for_label }}">Tinggi Logo (px)</label>
+          {{ form.ukuran_logo }}{{ form.ukuran_logo.errors }}
+        </div>
+        <div class="field">
+          <label>Status Logo</label>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">{{ form.tampilkan_logo }} Tampilkan logo pada rapor</label>
+        </div>
+      </div>
+    </div>
+  </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="layout">
+  <div class="section-title">Tata Letak Rapor</div>
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Pengaturan Halaman Cetak</h3>
+      <span class="hint">Berlaku untuk rapor dan sampul</span>
+    </div>
+    <div class="panel-body">
+      <div class="form-grid">
+        <div class="field full">
+          <label for="{{ form.judul_rapor.id_for_label }}">Judul Rapor</label>
+          {{ form.judul_rapor }}{{ form.judul_rapor.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.subjudul_rapor.id_for_label }}">Subjudul Rapor</label>
+          {{ form.subjudul_rapor }}{{ form.subjudul_rapor.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.ukuran_kertas.id_for_label }}">Ukuran Kertas</label>
+          {{ form.ukuran_kertas }}{{ form.ukuran_kertas.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.font_rapor.id_for_label }}">Jenis Huruf</label>
+          {{ form.font_rapor }}{{ form.font_rapor.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ form.ukuran_font.id_for_label }}">Ukuran Huruf (pt)</label>
+          {{ form.ukuran_font }}{{ form.ukuran_font.errors }}
+        </div>
+        <div class="field">
+          <label>Kop &amp; Alamat</label>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px;margin-bottom:6px">{{ form.tampilkan_header }} Tampilkan majelis &amp; pimpinan daerah</label>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">{{ form.tampilkan_alamat }} Tampilkan alamat sekolah</label>
+        </div>
+        <div class="field">
+          <label>Bagian Rapor</label>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px;margin-bottom:6px">{{ form.tampilkan_ekskul }} Tampilkan ekstrakurikuler</label>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px;margin-bottom:6px">{{ form.tampilkan_absensi }} Tampilkan ketidakhadiran</label>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:13px">{{ form.tampilkan_catatan }} Tampilkan catatan wali kelas</label>
+        </div>
+        <div class="field">
+          <label for="{{ form.label_ttd_orang_tua.id_for_label }}">Label TTD Orang Tua</label>
+          {{ form.label_ttd_orang_tua }}{{ form.label_ttd_orang_tua.errors }}
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:12.5px;margin-top:6px">{{ form.tampilkan_ttd_orang_tua }} Tampilkan</label>
+        </div>
+        <div class="field">
+          <label for="{{ form.label_ttd_kepala.id_for_label }}">Label TTD Kepala Sekolah</label>
+          {{ form.label_ttd_kepala }}{{ form.label_ttd_kepala.errors }}
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:12.5px;margin-top:6px">{{ form.tampilkan_ttd_kepala }} Tampilkan</label>
+        </div>
+        <div class="field">
+          <label for="{{ form.label_ttd_wali.id_for_label }}">Label TTD Wali Kelas</label>
+          {{ form.label_ttd_wali }}{{ form.label_ttd_wali.errors }}
+          <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:12.5px;margin-top:6px">{{ form.tampilkan_ttd_wali }} Tampilkan</label>
+        </div>
+      </div>
+    </div>
+  </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="kelas">
+  <div class="section-title">Kelas Aktif</div>
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Pengaturan Kelas Aktif</h3>
+      <span class="hint">{{ academic_year.tahun|default:"-" }} &middot; Semester {{ semester.nama|default:"-" }}</span>
+    </div>
+    <div class="panel-body">
+      {% if kelas_form %}
+      <div class="form-grid">
+        <div class="field">
+          <label for="{{ kelas_form.tingkat.id_for_label }}">Tingkat</label>
+          {{ kelas_form.tingkat }}{{ kelas_form.tingkat.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ kelas_form.nama.id_for_label }}">Nama Kelas</label>
+          {{ kelas_form.nama }}{{ kelas_form.nama.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ kelas_form.fase.id_for_label }}">Fase</label>
+          {{ kelas_form.fase }}{{ kelas_form.fase.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ kelas_form.wali_kelas_guru.id_for_label }}">Wali Kelas</label>
+          {{ kelas_form.wali_kelas_guru }}
+          <div class="help">Pilih dari Data Guru. <a href="{% url 'akademik:guru_list' %}">Kelola Data Guru</a></div>
+        </div>
+      </div>
+      {% else %}
+      <div class="alert info">Belum ada kelas aktif. Buat tahun pelajaran, semester, dan kelas pada halaman Pengaturan Akademik.</div>
+      {% endif %}
+      <div class="note-box" style="margin-top:16px">
+        Tahun pelajaran, semester, dan daftar kelas dikelola di <a href="{% url 'akademik:tahun_list' %}">Pengaturan Akademik</a>.
+      </div>
+    </div>
+  </div>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:18px">
+    <button type="submit" class="btn btn-primary"><svg class="icon"><use href="#i-save"/></svg> Simpan Perubahan</button>
+    <a class="btn" href="{% url 'akademik:dashboard' %}">Batal</a>
+  </div>
+</form>
+{% endblock %}
