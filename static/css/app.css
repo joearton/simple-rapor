@@ -198,6 +198,7 @@ a:hover { text-decoration: underline; }
 .panel-body { padding: 18px; }
 
 .grid { display: grid; gap: 16px; }
+.grid > * { min-width: 0; }
 .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -315,6 +316,35 @@ textarea { resize: vertical; min-height: 60px; }
 .help { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 .errorlist { list-style: none; margin: 4px 0 0; padding: 0; color: var(--danger); font-size: 12px; }
 .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 700; margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 8px; flex-wrap: wrap; }
+.section-head .section-title { margin: 0; border-bottom: 0; padding-bottom: 0; }
+.table-actions { display: flex; gap: 5px; flex-wrap: nowrap; align-items: center; }
+.btn-icon { width: 31px; height: 31px; padding: 0; justify-content: center; }
+.year-stats {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fbf9;
+}
+.year-stats > div { padding: 10px 12px; border-right: 1px solid var(--line); min-width: 0; }
+.year-stats > div:last-child { border-right: 0; }
+.year-stats b { display: block; font-size: 17px; color: var(--green-800); line-height: 1.1; }
+.year-stats span { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tahun-grid { align-items: start; }
+.year-panel .panel-head { flex-wrap: wrap; }
+.year-list { border-top: 1px solid var(--line); }
+.year-list-row { display: grid; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.semester-row { grid-template-columns: minmax(120px, 1fr) 90px auto; }
+.class-row { grid-template-columns: minmax(140px, 1fr) minmax(160px, 1.2fr) 60px minmax(150px, auto); }
+.year-list-row:last-child { border-bottom: 0; }
+.yl-main strong { display: block; font-size: 13px; }
+.yl-meta { font-size: 12.5px; color: #3d4d45; }
+.yl-label { display: inline; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-right: 5px; }
+.class-row .table-actions { flex-wrap: wrap; justify-content: flex-end; }
 .inline-form { display: inline; }
 
 /* ---------- Tables ---------- */
@@ -674,7 +704,30 @@ table.data .sub { display: block; font-weight: 400; color: var(--muted); font-si
 }
 
 /* ---------- Responsive akhir (mengalahkan aturan dasar di atas) ---------- */
+@media screen and (max-width: 1100px) {
+  .year-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .year-stats > div:nth-child(4n) { border-right: 0; }
+  .year-stats > div:nth-child(-n+4) { border-bottom: 1px solid var(--line); }
+}
+
 @media screen and (max-width: 820px) {
+  .year-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .year-stats > div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .year-stats > div:nth-child(odd) { border-right: 1px solid var(--line); }
+  .year-stats > div:last-child { border-bottom: 0; }
+  .section-head { align-items: flex-start; }
+  .section-head .table-actions { width: 100%; }
+  .section-head .table-actions .btn { flex: 1 1 auto; justify-content: center; }
+
+  .year-list-row,
+  .semester-row,
+  .class-row { grid-template-columns: 1fr auto; gap: 8px 10px; }
+  .year-list-row .table-actions { grid-column: 1 / -1; flex-wrap: wrap; }
+  .class-row .yl-meta { grid-column: 1 / -1; grid-row: 2; }
+  .class-row .yl-status { grid-column: 2; grid-row: 1; justify-self: end; }
+  .class-row .table-actions { grid-row: 3; }
+  .yl-label { display: inline; }
+
   .login-wrap {
     grid-template-columns: 1fr;
     min-height: 100vh;

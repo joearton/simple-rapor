@@ -249,6 +249,18 @@ class HalamanTest(RaporTestBase):
         self.client.post(reverse('akademik:formatif_entry', args=[self.mapel.id]), {})
         self.assertEqual(FormativeScore.objects.filter(student=self.siswa).count(), 0)
 
+    def test_sinkronkan_teks_tp_pada_formatif(self):
+        score = FormativeScore.objects.create(
+            student=self.siswa, objective=self.tp1, semester=self.semester,
+            nilai=3, deskripsi_tp='teks lama',
+        )
+        self.client.post(
+            reverse('akademik:formatif_entry', args=[self.mapel.id]),
+            {'aksi': 'sinkron_deskripsi'},
+        )
+        score.refresh_from_db()
+        self.assertEqual(score.deskripsi_tp, self.tp1.deskripsi)
+
     def test_rapor_menampilkan_nilai_dan_capaian(self):
         SummativeScore.objects.create(
             student=self.siswa, subject=self.mapel, semester=self.semester,

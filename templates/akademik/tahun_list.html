@@ -25,14 +25,14 @@
 </form>
 
 {% for row in rows %}
-<div class="panel" style="margin-bottom:18px">
+<div class="panel year-panel" style="margin-bottom:18px">
   <div class="panel-head">
     <div class="row-flex">
       <h3>{{ row.tahun.tahun }}</h3>
       {% if row.tahun.aktif %}<span class="badge badge-green">Aktif</span>{% else %}<span class="badge badge-gray">Tidak aktif</span>{% endif %}
       <span class="hint">{{ row.semesters|length }} semester &middot; {{ row.classes|length }} kelas &middot; {{ row.jumlah_siswa }} siswa{% if row.tahun.tanggal_mulai %} &middot; {{ row.tahun.tanggal_mulai|date:"d/m/Y" }}–{{ row.tahun.tanggal_berakhir|date:"d/m/Y" }}{% endif %}</span>
     </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <div class="table-actions">
       {% if not row.tahun.aktif %}
       <form method="post" action="{% url 'akademik:tahun_aktifkan' row.tahun.id %}" class="inline-form">
         {% csrf_token %}
@@ -42,87 +42,82 @@
       <a class="btn btn-sm" href="{% url 'akademik:tahun_ubah' row.tahun.id %}">Ubah</a>
       <form method="post" action="{% url 'akademik:tahun_hapus' row.tahun.id %}" class="inline-form" onsubmit="return confirm('Hapus tahun pelajaran {{ row.tahun.tahun|escapejs }}?');">
         {% csrf_token %}
-        <button class="btn btn-sm btn-danger" type="submit">Hapus</button>
+        <button class="btn btn-sm btn-danger btn-icon" type="submit" title="Hapus tahun" aria-label="Hapus tahun"><svg class="icon"><use href="#i-trash"/></svg></button>
       </form>
     </div>
   </div>
   <div class="panel-body">
-    <div class="legend" style="margin-bottom:14px;padding:10px 12px;background:#f8fbf9;border:1px solid var(--line);border-radius:8px">
-      <span><b>{{ row.jumlah_tp }}</b> tugas</span>
-      <span><b>{{ row.jumlah_formatif }}</b> nilai formatif</span>
-      <span><b>{{ row.jumlah_sumatif }}</b> nilai sumatif</span>
-      <span><b>{{ row.jumlah_eval_formatif }}</b> evaluasi formatif</span>
-      <span><b>{{ row.jumlah_eval_sumatif }}</b> evaluasi sumatif</span>
-      <span><b>{{ row.jumlah_catatan }}</b> catatan</span>
-      <span><b>{{ row.jumlah_ekskul }}</b> ekskul</span>
+    <div class="year-stats">
+      <div><b>{{ row.jumlah_tp }}</b><span>TP</span></div>
+      <div><b>{{ row.jumlah_formatif }}</b><span>nilai formatif</span></div>
+      <div><b>{{ row.jumlah_sumatif }}</b><span>nilai sumatif</span></div>
+      <div><b>{{ row.jumlah_eval_formatif }}</b><span>evaluasi formatif</span></div>
+      <div><b>{{ row.jumlah_eval_sumatif }}</b><span>evaluasi sumatif</span></div>
+      <div><b>{{ row.jumlah_catatan }}</b><span>catatan</span></div>
+      <div><b>{{ row.jumlah_ekskul }}</b><span>ekskul</span></div>
     </div>
-    <div class="grid grid-2">
+    <div class="grid grid-2 tahun-grid">
       <div>
-        <div class="section-title" style="margin-top:0">Semester</div>
-        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+        <div class="section-head">
+          <div class="section-title">Semester</div>
           <a class="btn btn-sm" href="{% url 'akademik:semester_tambah' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-plus"/></svg> Semester</a>
         </div>
-        <table class="data" id="table-tahun-list">
-          <thead><tr><th>Semester</th><th class="num">Status</th><th style="width:160px">Aksi</th></tr></thead>
-          <tbody>
-            {% for sem in row.semesters %}
-            <tr>
-              <td class="nama">{{ sem.get_nama_display }}</td>
-              <td class="num">{% if sem.aktif %}<span class="badge badge-green">Aktif</span>{% else %}<span class="badge badge-gray">-</span>{% endif %}</td>
-              <td>
-                <div style="display:flex;gap:5px;flex-wrap:wrap">
-                  {% if not sem.aktif %}
-                  <form method="post" action="{% url 'akademik:semester_aktifkan' sem.id %}" class="inline-form">
-                    {% csrf_token %}<button class="btn btn-sm" type="submit">Aktifkan</button>
-                  </form>
-                  {% endif %}
-                  <a class="btn btn-sm" href="{% url 'akademik:semester_ubah' sem.id %}">Ubah</a>
-                  <form method="post" action="{% url 'akademik:semester_hapus' sem.id %}" class="inline-form" onsubmit="return confirm('Hapus semester {{ sem.nama|escapejs }}?');">
-                    {% csrf_token %}<button class="btn btn-sm btn-danger" type="submit">Hapus</button>
-                  </form>
-                </div>
-              </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="3" class="empty">Belum ada semester.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        <div class="year-list" id="table-tahun-list">
+          {% for sem in row.semesters %}
+          <div class="year-list-row semester-row">
+            <div class="yl-main"><strong>{{ sem.get_nama_display }}</strong></div>
+            <div class="yl-status">{% if sem.aktif %}<span class="badge badge-green">Aktif</span>{% else %}<span class="badge badge-gray">-</span>{% endif %}</div>
+            <div class="table-actions">
+              {% if not sem.aktif %}
+              <form method="post" action="{% url 'akademik:semester_aktifkan' sem.id %}" class="inline-form">
+                {% csrf_token %}<button class="btn btn-sm" type="submit">Aktifkan</button>
+              </form>
+              {% endif %}
+              <a class="btn btn-sm" href="{% url 'akademik:semester_ubah' sem.id %}">Ubah</a>
+              <form method="post" action="{% url 'akademik:semester_hapus' sem.id %}" class="inline-form" onsubmit="return confirm('Hapus semester {{ sem.nama|escapejs }}?');">
+                {% csrf_token %}<button class="btn btn-sm btn-danger btn-icon" type="submit" title="Hapus semester" aria-label="Hapus semester"><svg class="icon"><use href="#i-trash"/></svg></button>
+              </form>
+            </div>
+          </div>
+          {% empty %}
+          <div class="empty">Belum ada semester.</div>
+          {% endfor %}
+        </div>
       </div>
       <div>
-        <div class="section-title" style="margin-top:0">Kelas</div>
-        <div style="display:flex;justify-content:flex-end;gap:5px;margin-bottom:8px">
-          <a class="btn btn-sm" href="{% url 'akademik:ekspor' 'kelas' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
-          <a class="btn btn-sm" href="{% url 'akademik:impor' 'kelas' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
-          <a class="btn btn-sm" href="{% url 'akademik:kelas_tambah' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-plus"/></svg> Kelas</a>
+        <div class="section-head">
+          <div class="section-title">Kelas</div>
+          <div class="table-actions">
+            <a class="btn btn-sm" href="{% url 'akademik:ekspor' 'kelas' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-file"/></svg> Ekspor</a>
+            <a class="btn btn-sm" href="{% url 'akademik:impor' 'kelas' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-save"/></svg> Impor</a>
+            <a class="btn btn-sm" href="{% url 'akademik:kelas_tambah' %}?tahun={{ row.tahun.id }}"><svg class="icon"><use href="#i-plus"/></svg> Kelas</a>
+          </div>
         </div>
-        <table class="data">
-          <thead><tr><th>Kelas</th><th>Wali Kelas</th><th class="num">Status</th><th style="width:190px">Aksi</th></tr></thead>
-          <tbody>
-            {% for kelas in row.classes %}
-            <tr>
-              <td class="nama">{{ kelas.nama_lengkap }}<span class="sub">Fase {{ kelas.fase }}</span></td>
-              <td>{{ kelas.nama_wali|default:"-" }}</td>
-              <td class="num">{% if kelas.aktif %}<span class="badge badge-green">Aktif</span>{% else %}<span class="badge badge-gray">-</span>{% endif %}</td>
-              <td>
-                <div style="display:flex;gap:5px;flex-wrap:wrap">
-                  {% if not kelas.aktif %}
-                  <form method="post" action="{% url 'akademik:kelas_aktifkan' kelas.id %}" class="inline-form">
-                    {% csrf_token %}<button class="btn btn-sm" type="submit">Aktifkan</button>
-                  </form>
-                  {% endif %}
-                  <a class="btn btn-sm" href="{% url 'akademik:kelas_ubah' kelas.id %}">Ubah</a>
-                  <form method="post" action="{% url 'akademik:kelas_hapus' kelas.id %}" class="inline-form" onsubmit="return confirm('Hapus kelas {{ kelas.nama_lengkap|escapejs }}?');">
-                    {% csrf_token %}<button class="btn btn-sm btn-danger" type="submit">Hapus</button>
-                  </form>
-                </div>
-              </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="4" class="empty">Belum ada kelas.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        <div class="year-list">
+          {% for kelas in row.classes %}
+          <div class="year-list-row class-row">
+            <div class="yl-main">
+              <strong>{{ kelas.nama_lengkap }}</strong>
+              <span class="sub">Fase {{ kelas.fase }}</span>
+            </div>
+            <div class="yl-meta"><span class="yl-label">Wali Kelas</span>{{ kelas.nama_wali|default:"-" }}</div>
+            <div class="yl-status">{% if kelas.aktif %}<span class="badge badge-green">Aktif</span>{% else %}<span class="badge badge-gray">-</span>{% endif %}</div>
+            <div class="table-actions">
+              {% if not kelas.aktif %}
+              <form method="post" action="{% url 'akademik:kelas_aktifkan' kelas.id %}" class="inline-form">
+                {% csrf_token %}<button class="btn btn-sm" type="submit">Aktifkan</button>
+              </form>
+              {% endif %}
+              <a class="btn btn-sm btn-icon" href="{% url 'akademik:kelas_ubah' kelas.id %}" title="Ubah kelas" aria-label="Ubah kelas"><svg class="icon"><use href="#i-edit"/></svg></a>
+              <form method="post" action="{% url 'akademik:kelas_hapus' kelas.id %}" class="inline-form" onsubmit="return confirm('Hapus kelas {{ kelas.nama_lengkap|escapejs }}?');">
+                {% csrf_token %}<button class="btn btn-sm btn-danger btn-icon" type="submit" title="Hapus kelas" aria-label="Hapus kelas"><svg class="icon"><use href="#i-trash"/></svg></button>
+              </form>
+            </div>
+          </div>
+          {% empty %}
+          <div class="empty">Belum ada kelas.</div>
+          {% endfor %}
+        </div>
       </div>
     </div>
   </div>

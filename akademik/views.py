@@ -523,6 +523,25 @@ def formatif_entry(request, subject_id):
         if _kelas_terkunci(kelas, semester):
             messages.error(request, 'Rapor kelas ini sudah terbit dan terkunci.')
             return redirect(request.get_full_path())
+        if request.POST.get('aksi') == 'sinkron_deskripsi':
+            jumlah = 0
+            with transaction.atomic():
+                for score in FormativeScore.objects.filter(
+                    student__in=students,
+                    objective__subject=subject,
+                    objective__academic_year=semester.academic_year,
+                    semester=semester,
+                ).select_related('objective'):
+                    if score.deskripsi_tp != score.objective.deskripsi:
+                        score.deskripsi_tp = score.objective.deskripsi
+                        score.save(update_fields=['deskripsi_tp'])
+                        jumlah += 1
+            messages.success(
+                request,
+                f'Deskripsi disinkronkan dari TP untuk {jumlah} nilai. '
+                'Deskripsi rapor akan memakai teks terbaru.',
+            )
+            return redirect(request.get_full_path())
         jumlah = 0
         with transaction.atomic():
             for siswa in students:

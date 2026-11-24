@@ -1,5 +1,6 @@
 {% extends 'akademik/base.html' %}
 {% load akademik_extras %}
+{% load l10n %}
 {% block title %}Asesmen Sumatif{% endblock %}
 {% block topbar %}Evaluasi Sumatif{% endblock %}
 
@@ -72,21 +73,21 @@
             {% for nilai in row.lm %}
             <td class="num">
               <input class="cell-input lm-input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                     name="lm_{{ row.siswa.id }}_{{ forloop.counter }}" value="{{ nilai|floatformat:'-2' }}">
+                     name="lm_{{ row.siswa.id }}_{{ forloop.counter }}" value="{{ nilai|unlocalize|floatformat:'-2' }}">
             </td>
             {% endfor %}
             <td class="num cell-score" data-rata-lm>{{ row.rata_lm|rupiah_nilai }}</td>
             <td class="num">
               <input class="cell-input sts-input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                     name="sts_{{ row.siswa.id }}" value="{{ row.sts|floatformat:'-2' }}">
+                     name="sts_{{ row.siswa.id }}" value="{{ row.sts|unlocalize|floatformat:'-2' }}">
             </td>
             <td class="num">
               <input class="cell-input sasn-input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                     name="sasn_{{ row.siswa.id }}" value="{{ row.sas_non_tes|floatformat:'-2' }}">
+                     name="sasn_{{ row.siswa.id }}" value="{{ row.sas_non_tes|unlocalize|floatformat:'-2' }}">
             </td>
             <td class="num">
               <input class="cell-input sast-input" type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                     name="sast_{{ row.siswa.id }}" value="{{ row.sas_tes|floatformat:'-2' }}">
+                     name="sast_{{ row.siswa.id }}" value="{{ row.sas_tes|unlocalize|floatformat:'-2' }}">
             </td>
             <td class="num cell-score" data-rata-sas>{{ row.rata_sas|rupiah_nilai }}</td>
             <td class="num cell-score" data-nilai-rapor>{{ row.nilai_rapor|rupiah_nilai }}</td>

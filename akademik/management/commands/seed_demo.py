@@ -12,6 +12,8 @@ from akademik.assessment_sync import sinkron_ulang_legacy
 from akademik.models import (
     AcademicYear,
     ClassGroup,
+    EvaluasiFormatif,
+    EvaluasiSumatif,
     Extracurricular,
     FormativeScore,
     GradeConfiguration,
@@ -330,6 +332,28 @@ class Command(BaseCommand):
                         'aktif': True,
                     },
                 )
+            EvaluasiFormatif.objects.update_or_create(
+                subject=subject,
+                nama=f'Kuis dan latihan {nama}',
+                defaults={
+                    'jenis': 'kuis',
+                    'tanggal': date(2026, 8, 10),
+                    'bobot': Decimal('20'),
+                    'deskripsi': 'Kuis singkat dan latihan terbimbing.',
+                    'aktif': True,
+                },
+            )
+            EvaluasiSumatif.objects.update_or_create(
+                subject=subject,
+                nama=f'STS {nama}',
+                defaults={
+                    'jenis': 'sts',
+                    'tanggal': date(2026, 9, 21),
+                    'bobot': Decimal('40'),
+                    'deskripsi': 'Sumatif tengah semester.',
+                    'aktif': True,
+                },
+            )
 
         guru_mapel = {mapel: teachers[nama] for nama, mapel, _, _ in GURU}
         for kelas in kelas_list:
